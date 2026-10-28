@@ -103,8 +103,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible + .switch { 
 @keyframes slideIn { from { transform: translateX(18px); opacity: .35; } to { transform: none; opacity: 1; } }
 .card.enter-back { animation: slideBack .22s ease-out; }
 @keyframes slideBack { from { transform: translateX(-18px); opacity: .35; } to { transform: none; opacity: 1; } }
-.card-head { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; gap: 4px; }
-.nav { width: 40px; height: 36px; border-radius: 8px; border: 0; background: transparent; font-size: 22px; line-height: 1; color: var(--muted); }
+.card-head { display: grid; grid-template-columns: 76px 1fr 76px; align-items: center; gap: 4px; }
+.nav { width: 76px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-family: var(--display); font-weight: 800; font-size: 14px; line-height: 1; color: var(--ink); }
 .nav:disabled { opacity: .25; cursor: default; }
 .when { text-align: center; font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); line-height: 1.3; }
 .when b { color: var(--ink); }
@@ -154,7 +154,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible + .switch { 
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .col-cap { text-align: center; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
-.foot { display: flex; justify-content: space-between; gap: 8px; }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.nextbtn { border: 0; border-radius: 10px; padding: 13px 18px; background: var(--ink); color: var(--bg); font-family: var(--display); font-weight: 800; font-size: 16px; letter-spacing: .02em; white-space: nowrap; }
 .link { border: 0; background: transparent; padding: 8px 4px; font-size: 14px; font-weight: 600; color: var(--muted); }
 .link:disabled { opacity: .35; cursor: default; }
 .link.accent { color: var(--accent); }
@@ -216,6 +217,16 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible + .switch { 
 .filebtn { position: relative; overflow: hidden; cursor: pointer; display: inline-block; }
 .filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .filebtn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.save-block { border-top: 1px solid var(--line); padding: 12px 0; }
+.save-block > p { margin: 0; }
+.save-block > p small { display: block; color: var(--muted); font-size: 13px; }
+.save-form { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.save-form input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); padding: 9px 10px; font-size: 14px; font-weight: 600; }
+.save-form .note { flex: 1; }
+.state-list { display: flex; flex-direction: column; margin-top: 4px; }
+.state-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.state-row b { font-size: 14px; }
+.state-row small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
 
 /* Playoffs */
 .sec-h {
@@ -380,7 +391,7 @@ const OPTS = [60, 70, 80, 90, 100];
 const LS_KEY = "nfl-win-picker-2026";
 
 const S = { picks: {}, useResults: true, updatedAt: 0 };
-const UI = { view: "pick", pendingImport: null, importMsg: "", recMode: "res", conf: 0, anim: false, cursor: null, tableMode: "div", team: null, dir: 1, resetArmed: false, sync: "device" };
+const UI = { view: "pick", pendingImport: null, importMsg: "", recMode: "res", conf: 0, anim: false, cursor: null, tableMode: "div", team: null, dir: 1, resetArmed: false, sync: "device", saveName: "", saveMsg: "", armSave: null };
 
 /* ---------- storage ---------- */
 // Picks saved when this site was built. Used the first time the site opens in a browser.
@@ -398,6 +409,38 @@ function saveLocal() {
   try { localStorage.setItem(LS_KEY, JSON.stringify({ ...S, cursor: UI.cursor })); } catch (e) {}
 }
 function persist() { S.updatedAt = Date.now(); saveLocal(); }
+
+/* ---------- save states ---------- */
+// Named sets of picks kept in this browser, separate from the current picks.
+// "My picks" is seeded from whatever picks are current the first time this
+// version runs, and "Clear" is a blank set, so neither can be lost by loading the other.
+const STATES_KEY = "nfl-win-picker-2026-states";
+function esc(v) { return String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function loadStates() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STATES_KEY) || "[]");
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(st => st && typeof st.name === "string").map(st => {
+      const c = clean({ picks: st.picks, useResults: st.useResults });
+      return { name: st.name, picks: c.picks, useResults: c.useResults, updatedAt: +st.updatedAt || 0 };
+    });
+  } catch (e) { return []; }
+}
+function saveStates(list) { try { localStorage.setItem(STATES_KEY, JSON.stringify(list)); } catch (e) {} }
+function ensureSeedStates() {
+  try {
+    if (localStorage.getItem(STATES_KEY) !== null) return;
+    const list = [];
+    if (Object.keys(S.picks).length) list.push({ name: "My picks", picks: { ...S.picks }, useResults: S.useResults, updatedAt: Date.now() });
+    list.push({ name: "Clear", picks: {}, useResults: true, updatedAt: Date.now() });
+    saveStates(list);
+  } catch (e) {}
+}
+function fmtStateDate(ms) {
+  if (!ms) return "";
+  const d = new Date(ms);
+  return d.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
 
 /* ---------- backup and restore ---------- */
 function exportPayload() {
@@ -804,9 +847,9 @@ function renderPick() {
       <nav class="weeks" id="weeks" aria-label="Weeks">${chips}</nav>
       <article class="card ${UI.anim ? (UI.dir > 0 ? "enter" : "enter-back") : ""}" aria-live="polite">
         <div class="card-head">
-          <button class="nav" data-step="-1" type="button" aria-label="Previous game" ${qi <= 0 ? "disabled" : ""}>‹</button>
+          <button class="nav" data-step="-1" type="button" aria-label="Previous game" ${qi <= 0 ? "disabled" : ""}>‹ Prev</button>
           <div class="when"><b>Week ${g.wk}</b> · Game ${pos} of ${wkGames.length}<br>${fmtDate(g)} · ${fmtTime(g.time)}</div>
-          <button class="nav" data-step="1" type="button" aria-label="Next game" ${qi >= q.length - 1 ? "disabled" : ""}>›</button>
+          <button class="nav" data-step="1" type="button" aria-label="Next game" ${qi >= q.length - 1 ? "disabled" : ""}>Next ›</button>
         </div>
         <div class="teams">
           ${side(g.away, A, g.as)}
@@ -820,7 +863,7 @@ function renderPick() {
       <div class="cols">${col(g.away, false)}${col(g.home, true)}</div>
       <div class="foot">
         <button class="link" data-clear type="button" ${pick === undefined ? "disabled" : ""}>Clear pick</button>
-        <button class="link accent" data-skip type="button">${allDone ? "Next game ›" : "Skip for now ›"}</button>
+        <button class="nextbtn" data-skip type="button" aria-label="Go to next game without picking this one">Go to next game ›</button>
       </div>
     </div>`;
   UI.anim = false;
@@ -858,6 +901,15 @@ function renderTable() {
       body += `<section class="group"><div class="group-h">${conf}<small>Projected W–L</small></div>${list.map((r, i) => rowHtml(r, i + 1)).join("")}</section>`;
     }
   }
+  const states = loadStates();
+  const statesHtml = states.map((st, i) => `<div class="state-row">
+      <div><b>${esc(st.name)}</b><small>${Object.keys(st.picks).length} picks${st.updatedAt ? ` · Saved ${fmtStateDate(st.updatedAt)}` : ""}</small></div>
+      <span class="btns">
+        <button type="button" class="danger${UI.armSave === "load-" + i ? " arm" : ""}" data-state-load="${i}">${UI.armSave === "load-" + i ? "Tap again to load" : "Load"}</button>
+        <button type="button" class="danger${UI.armSave === "over-" + i ? " arm" : ""}" data-state-overwrite="${i}">${UI.armSave === "over-" + i ? "Tap again to overwrite" : "Overwrite"}</button>
+        <button type="button" class="danger${UI.armSave === "del-" + i ? " arm" : ""}" data-state-delete="${i}">${UI.armSave === "del-" + i ? "Tap again to delete" : "Delete"}</button>
+      </span>
+    </div>`).join("");
   $("view").innerHTML = `
     <div class="ask">
       <div class="seg" role="tablist">
@@ -884,6 +936,20 @@ function renderTable() {
           ${UI.pendingImport
             ? `<span class="btns"><button type="button" class="danger" id="import-cancel">Cancel</button><button type="button" class="danger arm" id="import-yes">Replace</button></span>`
             : `<label class="danger filebtn">Choose file<input type="file" id="import-file" accept=".json,application/json"></label>`}
+        </div>
+        <div class="save-block">
+          <p>Save states<small>Keep different sets of picks in this browser. "My picks" is the set you started with, and "Clear" is a blank set. Loading a state replaces your current picks, so save them first if you want to keep them.</small></p>
+          <div class="save-form">
+            <input id="save-name" type="text" placeholder="Name for your current picks" value="${esc(UI.saveName || "")}" aria-label="Name for current picks">
+            <button type="button" class="danger" data-save-current>Save current picks</button>
+          </div>
+          <div class="save-form">
+            <button type="button" class="danger" data-save-clear>Save a clear state</button>
+            <span class="note">${UI.saveMsg ? esc(UI.saveMsg) : "Saved states stay in this browser only."}</span>
+          </div>
+          <div class="state-list">
+            ${statesHtml || `<p class="note">No save states yet.</p>`}
+          </div>
         </div>
         <div class="set-row">
           <p>Start over<small>Clears your ${GAMES.filter(g => !played(g) && S.picks[g.id] !== undefined).length} picks for games not played yet. Picks on finished games stay in your record.</small></p>
@@ -1127,10 +1193,10 @@ function step(d) {
 document.addEventListener("click", e => {
   const el = e.target.closest("button, [data-close]");
   if (!el) return;
-  if (el.id === "tab-pick") { UI.view = "pick"; UI.resetArmed = false; render(); window.scrollTo(0, 0); return; }
-  if (el.id === "tab-table") { UI.view = "table"; render(); window.scrollTo(0, 0); return; }
-  if (el.id === "tab-po") { UI.view = "po"; UI.resetArmed = false; render(); window.scrollTo(0, 0); return; }
-  if (el.id === "tab-rec") { UI.view = "rec"; UI.resetArmed = false; render(); window.scrollTo(0, 0); return; }
+  if (el.id === "tab-pick") { UI.view = "pick"; UI.resetArmed = false; UI.armSave = null; render(); window.scrollTo(0, 0); return; }
+  if (el.id === "tab-table") { UI.view = "table"; UI.armSave = null; render(); window.scrollTo(0, 0); return; }
+  if (el.id === "tab-po") { UI.view = "po"; UI.resetArmed = false; UI.armSave = null; render(); window.scrollTo(0, 0); return; }
+  if (el.id === "tab-rec") { UI.view = "rec"; UI.resetArmed = false; UI.armSave = null; render(); window.scrollTo(0, 0); return; }
   if (el.dataset.rec) { UI.recMode = el.dataset.rec; return render(); }
   if (el.dataset.conf) { UI.conf = +el.dataset.conf; return render(); }
   if (el.hasAttribute("data-close")) { UI.team = null; renderSheet(); return; }
@@ -1158,6 +1224,63 @@ document.addEventListener("click", e => {
     S.picks = UI.pendingImport.picks; S.useResults = UI.pendingImport.useResults; UI.pendingImport = null;
     UI.importMsg = "Picks restored."; persist(); UI.cursor = firstOpen(); return render();
   }
+  if (el.hasAttribute("data-save-current")) {
+    const input = document.getElementById("save-name");
+    const name = (input ? input.value : UI.saveName || "").trim();
+    if (!name) { UI.saveMsg = "Give this save a name first."; return render(); }
+    const list = loadStates();
+    const entry = { name, picks: { ...S.picks }, useResults: S.useResults, updatedAt: Date.now() };
+    const existing = list.findIndex(st => st.name === name);
+    if (existing >= 0) list[existing] = entry; else list.push(entry);
+    saveStates(list); UI.saveName = ""; UI.armSave = null;
+    UI.saveMsg = `Saved "${name}" with ${Object.keys(S.picks).length} picks.`;
+    return render();
+  }
+  if (el.hasAttribute("data-save-clear")) {
+    const list = loadStates();
+    const entry = { name: "Clear", picks: {}, useResults: true, updatedAt: Date.now() };
+    const existing = list.findIndex(st => st.name === "Clear");
+    if (existing >= 0) list[existing] = entry; else list.push(entry);
+    saveStates(list); UI.armSave = null;
+    UI.saveMsg = "Clear state saved — a blank set of picks.";
+    return render();
+  }
+  if (el.dataset.stateLoad !== undefined) {
+    const i = +el.dataset.stateLoad, st = loadStates()[i];
+    if (!st) return;
+    if (UI.armSave !== "load-" + i) {
+      UI.armSave = "load-" + i; render();
+      setTimeout(() => { if (UI.armSave === "load-" + i) { UI.armSave = null; if (UI.view === "table") render(); } }, 4000);
+      return;
+    }
+    UI.armSave = null; S.picks = { ...st.picks }; S.useResults = st.useResults;
+    UI.saveMsg = `Loaded "${st.name}".`; persist(); UI.cursor = firstOpen(); return render();
+  }
+  if (el.dataset.stateOverwrite !== undefined) {
+    const i = +el.dataset.stateOverwrite, list = loadStates(), st = list[i];
+    if (!st) return;
+    if (UI.armSave !== "over-" + i) {
+      UI.armSave = "over-" + i; render();
+      setTimeout(() => { if (UI.armSave === "over-" + i) { UI.armSave = null; if (UI.view === "table") render(); } }, 4000);
+      return;
+    }
+    list[i] = { name: st.name, picks: { ...S.picks }, useResults: S.useResults, updatedAt: Date.now() };
+    saveStates(list); UI.armSave = null;
+    UI.saveMsg = `Overwrote "${st.name}" with your current picks.`;
+    return render();
+  }
+  if (el.dataset.stateDelete !== undefined) {
+    const i = +el.dataset.stateDelete, list = loadStates(), st = list[i];
+    if (!st) return;
+    if (UI.armSave !== "del-" + i) {
+      UI.armSave = "del-" + i; render();
+      setTimeout(() => { if (UI.armSave === "del-" + i) { UI.armSave = null; if (UI.view === "table") render(); } }, 4000);
+      return;
+    }
+    saveStates(list.filter((_, k) => k !== i)); UI.armSave = null;
+    UI.saveMsg = `Deleted "${st.name}".`;
+    return render();
+  }
   if (el.id === "reset") {
     if (!UI.resetArmed) { UI.resetArmed = true; render(); setTimeout(() => { if (UI.resetArmed) { UI.resetArmed = false; if (UI.view === "table") render(); } }, 4000); return; }
     UI.resetArmed = false;
@@ -1170,6 +1293,7 @@ document.addEventListener("click", e => {
   if (tr) { UI.team = tr.dataset.team; renderSheet(); }
 });
 document.addEventListener("change", e => {
+  if (e.target.id === "save-name") { UI.saveName = e.target.value; return; }
   if (e.target.id === "import-file" && e.target.files && e.target.files[0]) { readImport(e.target.files[0]); return; }
   if (e.target.id === "opt-results") { S.useResults = e.target.checked; persist(); if (!inQueue(BYID[UI.cursor])) UI.cursor = firstOpen(); render(); }
 });
@@ -1186,6 +1310,7 @@ document.addEventListener("keydown", e => {
   const local = loadLocal();
   if (local) Object.assign(S, local);
   else if (SEED) { Object.assign(S, clean(SEED)); S.updatedAt = Date.now(); saveLocal(); }
+  ensureSeedStates();
   try { const raw = JSON.parse(localStorage.getItem(LS_KEY) || "null"); if (raw && BYID[raw.cursor]) UI.cursor = raw.cursor; } catch (e) {}
   if (!UI.cursor || !inQueue(BYID[UI.cursor])) UI.cursor = firstOpen();
   render();

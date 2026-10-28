@@ -44,6 +44,7 @@ Keep `index.html` as one file and don't run it through a bundler or framework. E
 
 - Picks save in the browser's `localStorage` under the key `nfl-win-picker-2026`. Each browser and device keeps its own copy.
 - The first time the site opens in a new browser, it loads the owner's built-in picks.
+- **Save states** (Totals tab, under "Save states"): keep different sets of picks in the same browser. "My picks" is the set you started with, and "Clear" is a blank set. You can also save your current picks under any name, then Load, Overwrite, or Delete a state (Load and Overwrite ask you to tap twice). Loading a state replaces your current picks, so save them first if you want to keep them. Save states stay in this browser only — use Back up picks to move them to another device.
 - **To move picks to another device or back them up**, go to the Totals tab:
   - **Back up picks → Download** saves a `.json` file.
   - **Restore picks → Choose file** loads one. `picks.json` from this repo works here too.
@@ -63,7 +64,7 @@ Browsers that already have saved picks keep their own. For those, use **Restore 
 
 ## What's in the app
 
-- **Pick**: one game at a time. Tap a team's 60–100% button, or Toss-up for 50/50, and it moves to the next unpicked game. Games that are already final drop out of the list.
+- **Pick**: one game at a time. Tap a team's 60–100% button, or Toss-up for 50/50, and it moves to the next unpicked game. Games that are already final drop out of the list. The dark **Go to next game ›** button moves to the next game without picking the current one, and the **‹ Prev** / **Next ›** buttons at the top of the card step through games in order.
 - **Totals**: projected wins by division or conference, plus the settings (count real results, scores, backup, restore, start over).
   - Each game adds its win percentage to the team's total, so a 70% pick adds 0.7 wins.
   - Unpicked games count as 50/50.
