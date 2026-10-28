@@ -1,0 +1,1197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Pick every 2026 NFL game by win percentage and see projected win totals, playoff seeds and odds.">
+<meta name="theme-color" content="#EDF1EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B130F" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23E24E17'/%3E%3Cellipse cx='32' cy='32' rx='22' ry='13' fill='%23fff' transform='rotate(-35 32 32)'/%3E%3Cpath d='M24 38l16-12M27 30l4 4M31 27l4 4M35 24l4 4' stroke='%23E24E17' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>NFL Win Total Picker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one phone-width column — matchup card on top, two team columns of confidence buttons beneath, fixed tab bar at the bottom. */
+:root {
+  --bg: #EDF1EC;
+  --surface: #FFFFFF;
+  --surface-2: #E2E8E2;
+  --ink: #101A14;
+  --muted: #5A6A60;
+  --line: #C9D3CB;
+  --accent: #E24E17;      /* pylon orange */
+  --accent-ink: #FFFFFF;
+  --chalk: rgba(16, 26, 20, .08);
+  --L: 1;                 /* 1 = light theme, 0 = dark: picks team tint */
+  --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", Impact, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --tab-h: 62px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B130F; --surface: #131E18; --surface-2: #1B2821; --ink: #E8EFE9;
+    --muted: #8EA095; --line: #2A3A31; --accent: #FF6B33; --accent-ink: #1A0700;
+    --chalk: rgba(232, 239, 233, .06); --L: 0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B130F; --surface: #131E18; --surface-2: #1B2821; --ink: #E8EFE9;
+  --muted: #8EA095; --line: #2A3A31; --accent: #FF6B33; --accent-ink: #1A0700;
+  --chalk: rgba(232, 239, 233, .06); --L: 0; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.4;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, [tabindex]:focus-visible, input:focus-visible + .switch { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+
+.app {
+  max-width: 480px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px calc(var(--tab-h) + 20px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* Header + field progress */
+.top { display: flex; flex-direction: column; gap: 8px; }
+.top-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.wordmark { font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: .01em; text-transform: uppercase; margin: 0; line-height: 1; }
+.wordmark span { color: var(--accent); }
+.count { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.count b { color: var(--ink); font-weight: 700; }
+.field {
+  position: relative; height: 10px; border-radius: 3px; overflow: hidden;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), var(--line) calc(10% - 1px) 10%),
+    var(--surface-2);
+}
+.field i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); border-radius: 3px; transition: width .35s ease; }
+
+/* Week chips */
+.weeks { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-inline: -4px; padding: 2px 4px 4px; }
+.weeks::-webkit-scrollbar { display: none; }
+.wk {
+  flex: 0 0 auto; min-width: 44px; height: 36px; padding: 0 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center;
+  font-family: var(--display); font-weight: 700; font-size: 17px; line-height: 1; position: relative;
+}
+.wk small { display: block; font-family: var(--body); font-size: 9px; font-weight: 600; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.wk.done { background: var(--surface-2); }
+.wk.done::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.wk.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* Matchup card */
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 10px 10px 14px; display: flex; flex-direction: column; gap: 10px;
+  background-image: linear-gradient(90deg, transparent calc(50% - 1px), var(--chalk) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px));
+}
+.card.enter { animation: slideIn .22s ease-out; }
+@keyframes slideIn { from { transform: translateX(18px); opacity: .35; } to { transform: none; opacity: 1; } }
+.card.enter-back { animation: slideBack .22s ease-out; }
+@keyframes slideBack { from { transform: translateX(-18px); opacity: .35; } to { transform: none; opacity: 1; } }
+.card-head { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; gap: 4px; }
+.nav { width: 40px; height: 36px; border-radius: 8px; border: 0; background: transparent; font-size: 22px; line-height: 1; color: var(--muted); }
+.nav:disabled { opacity: .25; cursor: default; }
+.when { text-align: center; font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); line-height: 1.3; }
+.when b { color: var(--ink); }
+.teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 6px; }
+.side { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; min-width: 0; }
+.nick { font-family: var(--display); font-weight: 800; font-size: 24px; line-height: 1; text-transform: uppercase; letter-spacing: .01em; }
+.loc { font-size: 13px; color: var(--muted); line-height: 1.1; }
+.rec { font-size: 13px; font-weight: 600; }
+.at { align-self: start; padding-top: 20px; font-family: var(--display); font-weight: 700; font-size: 20px; color: var(--muted); }
+.score { font-family: var(--display); font-weight: 900; font-size: 28px; line-height: 1; }
+.meta { text-align: center; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; }
+.meta b { color: var(--ink); font-weight: 600; }
+
+/* Team badge (abbreviation in team colors) */
+.badge {
+  --bs: 64px; width: var(--bs); height: var(--bs); flex: 0 0 var(--bs); border-radius: 50%;
+  display: grid; place-items: center; font-family: var(--display); font-weight: 900;
+  font-size: calc(var(--bs) * .36); letter-spacing: .02em; line-height: 1;
+  box-shadow: inset 0 0 0 calc(var(--bs) * .07) var(--ring), 0 0 0 1px var(--line);
+  background: var(--tbg); color: var(--tfg);
+}
+.badge.sm { --bs: 34px; }
+.badge.xs { --bs: 26px; }
+
+/* Pick buttons */
+.ask { display: flex; flex-direction: column; gap: 8px; }
+.ask-q { font-size: 13px; font-weight: 600; color: var(--muted); text-align: center; margin: 0; }
+.opt {
+  --mix: calc(var(--L) * 100%);
+  --tc: color-mix(in srgb, var(--ui-l) var(--mix), var(--ui-d));
+  --tt: color-mix(in srgb, var(--uit-l) var(--mix), var(--uit-d));
+  height: 48px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--tc) 30%, var(--line));
+  background: color-mix(in srgb, var(--tc) calc(4% + var(--s) * 5%), var(--surface));
+  display: flex; align-items: center; justify-content: center; gap: 2px;
+  font-family: var(--display); font-weight: 800; font-size: 24px; line-height: 1;
+  transition: transform .08s ease, background .12s ease;
+}
+.opt span { font-size: 15px; font-weight: 700; opacity: .7; }
+.opt:active { transform: scale(.97); }
+.opt.sel { background: var(--tc); color: var(--tt); border-color: var(--tc); }
+.opt.sel span { opacity: .9; }
+.toss {
+  height: 46px; border-radius: 10px; border: 1px dashed var(--muted); background: var(--surface);
+  font-family: var(--display); font-weight: 800; font-size: 20px; letter-spacing: .03em; text-transform: uppercase;
+}
+.toss.sel { background: var(--ink); color: var(--bg); border-style: solid; border-color: var(--ink); }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.col-cap { text-align: center; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.foot { display: flex; justify-content: space-between; gap: 8px; }
+.link { border: 0; background: transparent; padding: 8px 4px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.link:disabled { opacity: .35; cursor: default; }
+.link.accent { color: var(--accent); }
+
+.banner {
+  border-radius: 12px; padding: 12px 14px; background: var(--ink); color: var(--bg);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.banner p { margin: 0; font-weight: 600; }
+.banner button { border: 0; border-radius: 8px; padding: 8px 12px; background: var(--accent); color: var(--accent-ink); font-weight: 700; white-space: nowrap; }
+
+/* Win totals */
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg button { border: 0; border-radius: 8px; padding: 8px; background: transparent; font-weight: 600; color: var(--muted); }
+.seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+.note b { color: var(--ink); }
+.group { display: flex; flex-direction: column; }
+.group-h {
+  display: flex; justify-content: space-between; align-items: baseline; padding: 14px 2px 6px;
+  font-family: var(--display); font-weight: 800; font-size: 18px; text-transform: uppercase; letter-spacing: .02em;
+  border-bottom: 2px solid var(--ink);
+}
+.group-h small { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--muted); }
+.row {
+  display: grid; grid-template-columns: 22px 34px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 10px 2px; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; width: 100%;
+}
+.rank { font-family: var(--display); font-weight: 700; font-size: 16px; color: var(--muted); text-align: right; }
+.row-name { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.row-name strong { font-weight: 700; font-size: 15px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-name strong em { font-style: normal; font-weight: 500; color: var(--muted); font-size: 13px; }
+.bar { position: relative; height: 6px; border-radius: 3px; background: var(--surface-2); }
+.bar i { position: absolute; inset: 0 auto 0 0; border-radius: 3px;
+  background: color-mix(in srgb, var(--ui-l) calc(var(--L) * 100%), var(--ui-d)); }
+.bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--muted); opacity: .6; }
+.proj { text-align: right; line-height: 1; min-width: 74px; }
+.proj b { font-family: var(--display); font-weight: 900; font-size: 26px; }
+.proj span { font-family: var(--display); font-weight: 700; font-size: 16px; color: var(--muted); }
+.proj small { display: block; font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+.settings { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 4px 14px; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; }
+.set-row + .set-row { border-top: 1px solid var(--line); }
+.set-row p { margin: 0; }
+.set-row p small { display: block; color: var(--muted); font-size: 13px; }
+.tog { position: relative; flex: 0 0 auto; }
+.tog input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch { display: block; width: 46px; height: 28px; border-radius: 14px; background: var(--line); position: relative; transition: background .15s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.tog input:checked + .switch { background: var(--accent); }
+.tog input:checked + .switch::after { transform: translateX(18px); }
+.danger { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 8px 12px; font-weight: 600; white-space: nowrap; }
+.danger.arm { background: #C62828; border-color: #C62828; color: #FFFFFF; }
+.feedline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.feedline .note { flex: 1; }
+.danger:disabled { opacity: .5; cursor: default; }
+.btns { display: flex; gap: 6px; flex: 0 0 auto; }
+.filebtn { position: relative; overflow: hidden; cursor: pointer; display: inline-block; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.filebtn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Playoffs */
+.sec-h {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 14px 2px 6px;
+  font-family: var(--display); font-weight: 800; font-size: 18px; text-transform: uppercase; letter-spacing: .02em;
+  border-bottom: 2px solid var(--ink);
+}
+.sec-h small { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.seed-row {
+  display: grid; grid-template-columns: 30px 34px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 10px 2px; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; width: 100%;
+}
+.seed-n { font-family: var(--display); font-weight: 900; font-size: 28px; line-height: 1; text-align: center; }
+.seed-row.out .seed-n { font-size: 20px; color: var(--muted); }
+.seed-row.out .badge { opacity: .75; }
+.seed-name { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.seed-name strong { font-weight: 700; font-size: 15px; line-height: 1.15; }
+.seed-name .sub { font-size: 12px; color: var(--muted); }
+.seed-name .why { font-size: 12px; color: var(--accent); font-weight: 600; }
+.tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--surface-2); color: var(--muted); margin-left: 6px; vertical-align: 2px; }
+.tag.bye { background: var(--accent); color: var(--accent-ink); }
+.tag.dw { background: var(--ink); color: var(--bg); }
+.odds { text-align: right; font-family: var(--display); font-weight: 800; font-size: 22px; line-height: 1; min-width: 56px; }
+.odds small { display: block; font-family: var(--body); font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
+.cutline { display: flex; align-items: center; gap: 8px; padding: 8px 2px 2px; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.cutline::before, .cutline::after { content: ""; flex: 1; border-top: 2px dashed var(--line); }
+.mus { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
+.mu { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.mu-side { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mu-side.h { justify-content: flex-end; text-align: right; }
+.mu-side b { font-family: var(--display); font-weight: 800; font-size: 18px; text-transform: uppercase; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-side small { display: block; font-size: 11px; color: var(--muted); font-weight: 600; }
+.mu-at { font-family: var(--display); font-weight: 700; color: var(--muted); font-size: 15px; }
+.mu.bye { grid-template-columns: auto minmax(0, 1fr); color: var(--muted); }
+.tblwrap { overflow-x: auto; }
+.oddtab { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.oddtab th { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; text-align: right; padding: 8px 6px 6px; white-space: nowrap; }
+.oddtab th:first-child, .oddtab td:first-child { text-align: left; }
+.oddtab td { padding: 6px; border-bottom: 1px solid var(--line); text-align: right; font-weight: 700; font-size: 14px; }
+.oddtab td.heat { background: color-mix(in srgb, var(--accent) calc(var(--p) * 38%), transparent); }
+.oddtab .tm { display: flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; }
+.oddtab tr { cursor: pointer; }
+.simbar { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; margin-top: 8px; }
+.simbar i { display: block; height: 100%; background: var(--accent); width: 0; }
+.fine { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+.seedtag { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--ink); color: var(--bg); font-size: 10px; font-weight: 700; letter-spacing: .04em; vertical-align: 2px; }
+
+/* My picks */
+.score-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; align-items: center; }
+.big { font-family: var(--display); font-weight: 900; font-size: 54px; line-height: .9; grid-row: span 3; }
+.big small { display: block; font-family: var(--body); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+.stat { font-size: 14px; color: var(--muted); }
+.stat b { color: var(--ink); font-weight: 700; }
+.cal { display: flex; flex-direction: column; }
+.cal-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) 64px; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); }
+.cal-lvl { font-family: var(--display); font-weight: 800; font-size: 20px; }
+.cal-track { position: relative; height: 10px; border-radius: 5px; background: var(--surface-2); }
+.cal-track i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; background: var(--accent); }
+.cal-track u { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--ink); border-radius: 1px; }
+.cal-n { text-align: right; font-size: 13px; font-weight: 700; line-height: 1.15; }
+.cal-n small { display: block; font-size: 11px; font-weight: 500; color: var(--muted); }
+.pk {
+  display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 10px 2px; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; width: 100%;
+}
+.pk-mu { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pk-mu .ln { display: flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+.pk-mu .ln b { font-family: var(--display); font-weight: 800; font-size: 17px; min-width: 22px; text-align: right; }
+.pk-mu .ln.lose { color: var(--muted); }
+.pk-mu .ln.lose b { font-weight: 600; }
+.pk-mu small { font-size: 12px; color: var(--muted); }
+.pk-you { display: flex; align-items: center; gap: 6px; font-family: var(--display); font-weight: 800; font-size: 20px; }
+.pk-you small { display: block; font-family: var(--body); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: right; }
+.mark { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+.mark.R { background: #2E7D4F; color: #FFFFFF; }
+.mark.X { background: #C62828; color: #FFFFFF; }
+.mark.N { background: var(--surface-2); color: var(--muted); }
+.empty { text-align: center; padding: 28px 8px; color: var(--muted); }
+.empty b { display: block; color: var(--ink); font-family: var(--display); font-weight: 800; font-size: 22px; text-transform: uppercase; margin-bottom: 4px; }
+
+/* Team sheet */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 30; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 31; max-height: 82%; overflow-y: auto;
+  background: var(--surface); border-radius: 18px 18px 0 0; border-top: 1px solid var(--line);
+  padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  animation: rise .2s ease-out;
+}
+.sheet-in { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+@keyframes rise { from { transform: translateY(30px); opacity: .5; } to { transform: none; opacity: 1; } }
+.sheet-h { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; }
+.sheet-h h2 { margin: 0; font-family: var(--display); font-weight: 900; font-size: 26px; text-transform: uppercase; line-height: 1; text-wrap: balance; }
+.sheet-h p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.x { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface-2); font-size: 18px; }
+.sched { display: flex; flex-direction: column; }
+.g {
+  display: grid; grid-template-columns: 36px 26px minmax(0,1fr) auto; align-items: center; gap: 10px;
+  padding: 9px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; width: 100%;
+}
+.g .w { font-family: var(--display); font-weight: 700; font-size: 15px; color: var(--muted); }
+.g .o { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g .o em { font-style: normal; color: var(--muted); font-weight: 500; }
+.g .r { font-family: var(--display); font-weight: 800; font-size: 18px; text-align: right; }
+.chip { display: inline-block; min-width: 26px; padding: 2px 6px; border-radius: 6px; font-size: 13px; font-weight: 800; text-align: center; font-family: var(--body); }
+.chip.W { background: #2E7D4F; color: #FFFFFF; }
+.chip.L { background: var(--surface-2); color: var(--muted); }
+.chip.T { background: var(--surface-2); color: var(--ink); }
+.unp { color: var(--accent); font-family: var(--body); font-size: 13px; font-weight: 700; }
+
+/* Tab bar */
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding: 6px max(16px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.tabs-in { max-width: 480px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; height: 50px; }
+.tab { border: 0; border-radius: 10px; background: transparent; font-family: var(--display); font-weight: 800; font-size: 16px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); white-space: nowrap; padding: 0 2px; }
+.tab.on { color: var(--ink); background: var(--surface-2); box-shadow: inset 0 -3px 0 var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .card.enter, .card.enter-back, .sheet { animation: none; }
+  .field i, .opt, .switch, .switch::after { transition: none; }
+}
+@media (max-width: 360px) {
+  .at { padding-top: 16px; }
+  .nick { font-size: 21px; }
+  .badge { --bs: 56px; }
+  .opt { height: 44px; font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="top-row">
+      <h1 class="wordmark">Win Total <span>Picker</span></h1>
+      <div class="count num" id="count"></div>
+    </div>
+    <div class="field" aria-hidden="true"><i id="fill"></i></div>
+  </header>
+  <main id="view"></main>
+</div>
+
+<nav class="tabs" aria-label="Views">
+  <div class="tabs-in">
+    <button class="tab" id="tab-pick" type="button">Pick</button>
+    <button class="tab" id="tab-table" type="button">Totals</button>
+    <button class="tab" id="tab-po" type="button">Playoffs</button>
+    <button class="tab" id="tab-rec" type="button">My picks</button>
+  </div>
+</nav>
+<div id="sheet-root"></div>
+
+<script>
+const DATA = {"builtAt":1793211377401,"asOf":"Oct 28, 2026","throughWeek":7,"teams":{"ARI":{"loc":"Arizona","nick":"Cardinals","div":"NFC West","bg":"#97233F","ring":"#FFB612","fg":"#FFFFFF","ui":"#97233F","uiD":"#FFB612","uiT":"#FFFFFF","uiDT":"#111111"},"ATL":{"loc":"Atlanta","nick":"Falcons","div":"NFC South","bg":"#A71930","ring":"#101820","fg":"#FFFFFF","ui":"#A71930","uiD":"#A71930","uiT":"#FFFFFF","uiDT":"#FFFFFF"},"BAL":{"loc":"Baltimore","nick":"Ravens","div":"AFC North","bg":"#241773","ring":"#9E7C0C","fg":"#FFFFFF","ui":"#241773","uiD":"#9E7C0C","uiT":"#FFFFFF","uiDT":"#FFFFFF"},"BUF":{"loc":"Buffalo","nick":"Bills","div":"AFC East","bg":"#00338D","ring":"#C60C30","fg":"#FFFFFF","ui":"#00338D","uiD":"#C60C30","uiT":"#FFFFFF","uiDT":"#FFFFFF"},"CAR":{"loc":"Carolina","nick":"Panthers","div":"NFC South","bg":"#0085CA","ring":"#101820","fg":"#FFFFFF","ui":"#0085CA","uiD":"#0085CA","uiT":"#FFFFFF","uiDT":"#FFFFFF"},"CHI":{"loc":"Chicago","nick":"Bears","div":"NFC North","bg":"#0B162A","ring":"#C83803","fg":"#FFFFFF","ui":"#0B162A","uiD":"#C83803","uiT":"#FFFFFF","uiDT":"#FFFFFF"},"CIN":{"loc":"Cincinnati","nick":"Bengals","div":"AFC North","bg":"#101820","ring":"#FB4F14","fg":"#FFFFFF","ui":"#101820","uiD":"#FB4F14","uiT":"#FFFFFF","uiDT":"#111111"},"CLE":{"loc":"Cleveland","nick":"Browns","div":"AFC North","bg":"#311D00","ring":"#FF3C00","fg":"#FFFFFF","ui":"#311D00","uiD":"#FF3C00","uiT":"#FFFFFF","uiDT":"#111111"},"DAL":{"loc":"Dallas","nick":"Cowboys","div":"NFC East","bg":"#041E42","ring":"#869397","fg":"#FFFFFF","ui":"#041E42","uiD":"#869397","uiT":"#FFFFFF","uiDT":"#111111"},"DEN":{"loc":"Denver","nick":"Broncos","div":"AFC West","bg":"#FB4F14","ring":"#002244","fg":"#111111","ui":"#FB4F14","uiD":"#FB4F14","uiT":"#111111","uiDT":"#111111"},"DET":{"loc":"Detroit","nick":"Lions","div":"NFC North","bg":"#0076B6","ring":"#B0B7BC","fg":"#FFFFFF","ui":"#0076B6","uiD":"#B0B7BC","uiT":"#FFFFFF","uiDT":"#111111"},"GB":{"loc":"Green Bay","nick":"Packers","div":"NFC North","bg":"#203731","ring":"#FFB612","fg":"#FFFFFF","ui":"#203731","uiD":"#FFB612","uiT":"#FFFFFF","uiDT":"#111111"},"HOU":{"loc":"Houston","nick":"Texans","div":"AFC South","bg":"#03202F","ring":"#A71930","fg":"#FFFFFF","ui":"#03202F","uiD":"#A71930","uiT":"#FFFFFF","uiDT":"#FFFFFF"},"IND":{"loc":"Indianapolis","nick":"Colts","div":"AFC South","bg":"#002C5F","ring":"#A2AAAD","fg":"#FFFFFF","ui":"#002C5F","uiD":"#A2AAAD","uiT":"#FFFFFF","uiDT":"#111111"},"JAX":{"loc":"Jacksonville","nick":"Jaguars","div":"AFC South","bg":"#006778","ring":"#D7A22A","fg":"#FFFFFF","ui":"#006778","uiD":"#D7A22A","uiT":"#FFFFFF","uiDT":"#111111"},"KC":{"loc":"Kansas City","nick":"Chiefs","div":"AFC West","bg":"#E31837","ring":"#FFB81C","fg":"#FFFFFF","ui":"#E31837","uiD":"#FFB81C","uiT":"#FFFFFF","uiDT":"#111111"},"LAC":{"loc":"Los Angeles","nick":"Chargers","div":"AFC West","bg":"#0080C6","ring":"#FFC20E","fg":"#FFFFFF","ui":"#0080C6","uiD":"#FFC20E","uiT":"#FFFFFF","uiDT":"#111111"},"LA":{"loc":"Los Angeles","nick":"Rams","div":"NFC West","bg":"#003594","ring":"#FFD100","fg":"#FFFFFF","ui":"#003594","uiD":"#FFD100","uiT":"#FFFFFF","uiDT":"#111111"},"LV":{"loc":"Las Vegas","nick":"Raiders","div":"AFC West","bg":"#000000","ring":"#A5ACAF","fg":"#FFFFFF","ui":"#000000","uiD":"#A5ACAF","uiT":"#FFFFFF","uiDT":"#111111"},"MIA":{"loc":"Miami","nick":"Dolphins","div":"AFC East","bg":"#008E97","ring":"#FC4C02","fg":"#FFFFFF","ui":"#008E97","uiD":"#FC4C02","uiT":"#FFFFFF","uiDT":"#111111"},"MIN":{"loc":"Minnesota","nick":"Vikings","div":"NFC North","bg":"#4F2683","ring":"#FFC62F","fg":"#FFFFFF","ui":"#4F2683","uiD":"#FFC62F","uiT":"#FFFFFF","uiDT":"#111111"},"NE":{"loc":"New England","nick":"Patriots","div":"AFC East","bg":"#002244","ring":"#C60C30","fg":"#FFFFFF","ui":"#002244","uiD":"#C60C30","uiT":"#FFFFFF","uiDT":"#FFFFFF"},"NO":{"loc":"New Orleans","nick":"Saints","div":"NFC South","bg":"#D3BC8D","ring":"#101820","fg":"#111111","ui":"#D3BC8D","uiD":"#D3BC8D","uiT":"#111111","uiDT":"#111111"},"NYG":{"loc":"New York","nick":"Giants","div":"NFC East","bg":"#0B2265","ring":"#A71930","fg":"#FFFFFF","ui":"#0B2265","uiD":"#A71930","uiT":"#FFFFFF","uiDT":"#FFFFFF"},"NYJ":{"loc":"New York","nick":"Jets","div":"AFC East","bg":"#125740","ring":"#FFFFFF","fg":"#FFFFFF","ui":"#125740","uiD":"#125740","uiT":"#FFFFFF","uiDT":"#FFFFFF"},"PHI":{"loc":"Philadelphia","nick":"Eagles","div":"NFC East","bg":"#004C54","ring":"#A5ACAF","fg":"#FFFFFF","ui":"#004C54","uiD":"#A5ACAF","uiT":"#FFFFFF","uiDT":"#111111"},"PIT":{"loc":"Pittsburgh","nick":"Steelers","div":"AFC North","bg":"#101820","ring":"#FFB612","fg":"#FFFFFF","ui":"#101820","uiD":"#FFB612","uiT":"#FFFFFF","uiDT":"#111111"},"SEA":{"loc":"Seattle","nick":"Seahawks","div":"NFC West","bg":"#002244","ring":"#69BE28","fg":"#FFFFFF","ui":"#002244","uiD":"#69BE28","uiT":"#FFFFFF","uiDT":"#111111"},"SF":{"loc":"San Francisco","nick":"49ers","div":"NFC West","bg":"#AA0000","ring":"#B3995D","fg":"#FFFFFF","ui":"#AA0000","uiD":"#B3995D","uiT":"#FFFFFF","uiDT":"#111111"},"TB":{"loc":"Tampa Bay","nick":"Buccaneers","div":"NFC South","bg":"#D50A0A","ring":"#34302B","fg":"#FFFFFF","ui":"#D50A0A","uiD":"#D50A0A","uiT":"#FFFFFF","uiDT":"#FFFFFF"},"TEN":{"loc":"Tennessee","nick":"Titans","div":"AFC South","bg":"#4B92DB","ring":"#0C2340","fg":"#111111","ui":"#4B92DB","uiD":"#4B92DB","uiT":"#111111","uiDT":"#111111"},"WAS":{"loc":"Washington","nick":"Commanders","div":"NFC East","bg":"#5A1414","ring":"#FFB612","fg":"#FFFFFF","ui":"#5A1414","uiD":"#FFB612","uiT":"#FFFFFF","uiDT":"#111111"}},"games":[["2026_01_NE_SEA",1,"2026-09-09","Wed","20:20","NE","SEA",10,13,3.0,60,null],["2026_01_SF_LA",1,"2026-09-10","Thu","20:35","SF","LA",27,7,3.5,66,"Melbourne Cricket Ground"],["2026_01_ATL_PIT",1,"2026-09-13","Sun","13:00","ATL","PIT",13,20,6.5,72,null],["2026_01_BAL_IND",1,"2026-09-13","Sun","13:00","BAL","IND",41,23,-3.0,41,null],["2026_01_BUF_HOU",1,"2026-09-13","Sun","13:00","BUF","HOU",36,31,-1.5,50,null],["2026_01_CHI_CAR",1,"2026-09-13","Sun","13:00","CHI","CAR",59,37,-3.0,40,null],["2026_01_CLE_JAX",1,"2026-09-13","Sun","13:00","CLE","JAX",10,34,8.5,79,null],["2026_01_NO_DET",1,"2026-09-13","Sun","13:00","NO","DET",30,31,7.0,73,null],["2026_01_NYJ_TEN",1,"2026-09-13","Sun","13:00","NYJ","TEN",23,10,1.5,52,null],["2026_01_TB_CIN",1,"2026-09-13","Sun","13:00","TB","CIN",27,33,3.5,64,null],["2026_01_ARI_LAC",1,"2026-09-13","Sun","16:25","ARI","LAC",26,14,8.5,79,null],["2026_01_GB_MIN",1,"2026-09-13","Sun","16:25","GB","MIN",22,39,1.5,53,null],["2026_01_MIA_LV",1,"2026-09-13","Sun","16:25","MIA","LV",13,27,3.0,60,null],["2026_01_WAS_PHI",1,"2026-09-13","Sun","16:25","WAS","PHI",22,24,6.0,68,null],["2026_01_DAL_NYG",1,"2026-09-13","Sun","20:20","DAL","NYG",20,28,-3.0,40,null],["2026_01_DEN_KC",1,"2026-09-14","Mon","20:15","DEN","KC",10,31,2.5,54,null],["2026_02_DET_BUF",2,"2026-09-17","Thu","20:15","DET","BUF",31,41,5.5,68,null],["2026_02_CAR_ATL",2,"2026-09-20","Sun","13:00","CAR","ATL",34,3,-2.5,42,null],["2026_02_CIN_HOU",2,"2026-09-20","Sun","13:00","CIN","HOU",20,6,3.0,57,null],["2026_02_CLE_TB",2,"2026-09-20","Sun","13:00","CLE","TB",23,19,8.5,78,null],["2026_02_GB_NYJ",2,"2026-09-20","Sun","13:00","GB","NYJ",20,17,-3.5,38,null],["2026_02_MIN_CHI",2,"2026-09-20","Sun","13:00","MIN","CHI",9,3,4.5,66,null],["2026_02_NO_BAL",2,"2026-09-20","Sun","13:00","NO","BAL",24,17,8.5,76,null],["2026_02_PHI_TEN",2,"2026-09-20","Sun","13:00","PHI","TEN",24,20,-7.0,27,null],["2026_02_PIT_NE",2,"2026-09-20","Sun","13:00","PIT","NE",3,20,4.5,66,null],["2026_02_JAX_DEN",2,"2026-09-20","Sun","16:05","JAX","DEN",13,20,2.5,57,null],["2026_02_LV_LAC",2,"2026-09-20","Sun","16:05","LV","LAC",26,14,6.5,73,null],["2026_02_MIA_SF",2,"2026-09-20","Sun","16:25","MIA","SF",13,35,12.5,86,null],["2026_02_SEA_ARI",2,"2026-09-20","Sun","16:25","SEA","ARI",31,7,-3.5,34,null],["2026_02_WAS_DAL",2,"2026-09-20","Sun","16:25","WAS","DAL",20,37,3.5,66,null],["2026_02_IND_KC",2,"2026-09-20","Sun","20:20","IND","KC",30,33,6.0,70,null],["2026_02_NYG_LA",2,"2026-09-21","Mon","20:15","NYG","LA",6,28,6.5,72,null],["2026_03_ATL_GB",3,"2026-09-24","Thu","20:15","ATL","GB",35,14,4.5,67,null],["2026_03_CAR_CLE",3,"2026-09-27","Sun","13:00","CAR","CLE",18,21,-2.5,45,null],["2026_03_CIN_PIT",3,"2026-09-27","Sun","13:00","CIN","PIT",27,30,-3.5,38,null],["2026_03_HOU_IND",3,"2026-09-27","Sun","13:00","HOU","IND",17,19,-1.5,47,null],["2026_03_KC_MIA",3,"2026-09-27","Sun","13:00","KC","MIA",24,10,-10.0,18,null],["2026_03_LAC_BUF",3,"2026-09-27","Sun","13:00","LAC","BUF",16,24,7.0,73,null],["2026_03_NE_JAX",3,"2026-09-27","Sun","13:00","NE","JAX",6,35,3.0,59,null],["2026_03_NYJ_DET",3,"2026-09-27","Sun","13:00","NYJ","DET",24,31,7.0,73,null],["2026_03_SEA_WAS",3,"2026-09-27","Sun","13:00","SEA","WAS",31,33,-8.5,23,null],["2026_03_TEN_NYG",3,"2026-09-27","Sun","13:00","TEN","NYG",7,12,2.5,54,null],["2026_03_ARI_SF",3,"2026-09-27","Sun","16:05","ARI","SF",30,36,7.5,77,null],["2026_03_MIN_TB",3,"2026-09-27","Sun","16:05","MIN","TB",23,16,-1.5,50,null],["2026_03_BAL_DAL",3,"2026-09-27","Sun","16:25","BAL","DAL",34,31,-3.0,40,"Maracana Stadium"],["2026_03_LV_NO",3,"2026-09-27","Sun","16:25","LV","NO",35,27,3.5,63,null],["2026_03_LA_DEN",3,"2026-09-27","Sun","20:20","LA","DEN",26,30,1.5,50,null],["2026_03_PHI_CHI",3,"2026-09-28","Mon","20:15","PHI","CHI",7,27,-3.5,36,null],["2026_04_PIT_CLE",4,"2026-10-01","Thu","20:15","PIT","CLE",24,27,-2.5,43,null],["2026_04_IND_WAS",4,"2026-10-04","Sun","09:30","IND","WAS",30,13,-4.5,33,"Tottenham Hotspur Stadium"],["2026_04_ARI_NYG",4,"2026-10-04","Sun","13:00","ARI","NYG",24,36,-2.5,45,null],["2026_04_DAL_HOU",4,"2026-10-04","Sun","13:00","DAL","HOU",34,30,3.0,58,null],["2026_04_GB_TB",4,"2026-10-04","Sun","13:00","GB","TB",17,14,-3.0,42,null],["2026_04_JAX_CIN",4,"2026-10-04","Sun","13:00","JAX","CIN",22,17,2.5,57,null],["2026_04_LA_PHI",4,"2026-10-04","Sun","13:00","LA","PHI",24,20,-3.5,36,null],["2026_04_NE_BUF",4,"2026-10-04","Sun","13:00","NE","BUF",29,26,7.0,74,null],["2026_04_NYJ_CHI",4,"2026-10-04","Sun","13:00","NYJ","CHI",12,23,3.5,63,null],["2026_04_TEN_BAL",4,"2026-10-04","Sun","13:00","TEN","BAL",18,24,11.5,85,null],["2026_04_MIA_MIN",4,"2026-10-04","Sun","16:05","MIA","MIN",10,15,10.0,81,null],["2026_04_DEN_SF",4,"2026-10-04","Sun","16:25","DEN","SF",14,24,3.0,60,null],["2026_04_KC_LV",4,"2026-10-04","Sun","16:25","KC","LV",30,27,-4.5,34,null],["2026_04_LAC_SEA",4,"2026-10-04","Sun","16:25","LAC","SEA",23,30,7.0,74,null],["2026_04_DET_CAR",4,"2026-10-04","Sun","20:20","DET","CAR",26,32,-4.5,34,null],["2026_04_ATL_NO",4,"2026-10-05","Mon","20:15","ATL","NO",45,24,1.5,52,null],["2026_05_TB_DAL",5,"2026-10-08","Thu","20:15","TB","DAL",24,16,9.5,81,null],["2026_05_PHI_JAX",5,"2026-10-11","Sun","09:30","PHI","JAX",17,19,7.5,76,"Tottenham Hotspur Stadium"],["2026_05_CHI_GB",5,"2026-10-11","Sun","13:00","CHI","GB",7,31,-1.5,47,null],["2026_05_CIN_MIA",5,"2026-10-11","Sun","13:00","CIN","MIA",31,24,-7.0,25,null],["2026_05_CLE_NYJ",5,"2026-10-11","Sun","13:00","CLE","NYJ",12,17,2.5,56,null],["2026_05_HOU_TEN",5,"2026-10-11","Sun","13:00","HOU","TEN",26,3,-6.5,27,null],["2026_05_IND_PIT",5,"2026-10-11","Sun","13:00","IND","PIT",22,34,3.0,59,null],["2026_05_LV_NE",5,"2026-10-11","Sun","13:00","LV","NE",17,45,3.5,62,null],["2026_05_MIN_NO",5,"2026-10-11","Sun","13:00","MIN","NO",23,13,-2.5,44,null],["2026_05_NYG_WAS",5,"2026-10-11","Sun","13:00","NYG","WAS",27,27,3.5,62,null],["2026_05_DEN_LAC",5,"2026-10-11","Sun","16:05","DEN","LAC",23,17,-3.5,37,null],["2026_05_DET_ARI",5,"2026-10-11","Sun","16:25","DET","ARI",45,21,-5.5,30,null],["2026_05_SF_SEA",5,"2026-10-11","Sun","16:25","SF","SEA",32,29,3.0,60,null],["2026_05_BAL_ATL",5,"2026-10-11","Sun","20:20","BAL","ATL",30,23,3.5,61,null],["2026_05_BUF_LA",5,"2026-10-12","Mon","20:15","BUF","LA",37,34,3.5,62,null],["2026_06_SEA_DEN",6,"2026-10-15","Thu","20:15","SEA","DEN",14,17,-2.5,42,null],["2026_06_HOU_JAX",6,"2026-10-18","Sun","09:30","HOU","JAX",34,31,2.5,56,"Wembley Stadium"],["2026_06_BAL_CLE",6,"2026-10-18","Sun","13:00","BAL","CLE",10,13,-3.0,40,null],["2026_06_CAR_PHI",6,"2026-10-18","Sun","13:00","CAR","PHI",25,14,-3.0,41,null],["2026_06_CHI_ATL",6,"2026-10-18","Sun","13:00","CHI","ATL",31,23,-1.5,48,null],["2026_06_NO_NYG",6,"2026-10-18","Sun","13:00","NO","NYG",34,27,-1.5,50,null],["2026_06_NYJ_NE",6,"2026-10-18","Sun","13:00","NYJ","NE",19,26,7.5,74,null],["2026_06_PIT_TB",6,"2026-10-18","Sun","13:00","PIT","TB",26,19,-2.5,44,null],["2026_06_TEN_IND",6,"2026-10-18","Sun","13:00","TEN","IND",26,20,6.5,72,null],["2026_06_ARI_LA",6,"2026-10-18","Sun","16:05","ARI","LA",18,16,12.5,84,null],["2026_06_BUF_LV",6,"2026-10-18","Sun","16:25","BUF","LV",33,30,-5.5,32,null],["2026_06_LAC_KC",6,"2026-10-18","Sun","16:25","LAC","KC",6,22,7.5,79,null],["2026_06_DAL_GB",6,"2026-10-18","Sun","20:20","DAL","GB",13,23,-1.5,49,null],["2026_06_WAS_SF",6,"2026-10-19","Mon","20:15","WAS","SF",17,23,7.5,77,null],["2026_07_NE_CHI",7,"2026-10-22","Thu","20:15","NE","CHI",24,30,3.0,58,null],["2026_07_PIT_NO",7,"2026-10-25","Sun","09:30","PIT","NO",16,10,-3.0,41,"Stade de France"],["2026_07_CIN_BAL",7,"2026-10-25","Sun","13:00","CIN","BAL",35,13,-3.0,41,null],["2026_07_CLE_TEN",7,"2026-10-25","Sun","13:00","CLE","TEN",27,24,-1.5,46,null],["2026_07_IND_MIN",7,"2026-10-25","Sun","13:00","IND","MIN",10,16,6.5,73,null],["2026_07_MIA_NYJ",7,"2026-10-25","Sun","13:00","MIA","NYJ",28,25,3.5,66,null],["2026_07_NYG_HOU",7,"2026-10-25","Sun","13:00","NYG","HOU",27,21,10.0,80,null],["2026_07_SF_ATL",7,"2026-10-25","Sun","13:00","SF","ATL",20,29,-2.5,42,null],["2026_07_TB_CAR",7,"2026-10-25","Sun","13:00","TB","CAR",43,13,3.0,60,null],["2026_07_DEN_ARI",7,"2026-10-25","Sun","16:05","DEN","ARI",30,16,-4.5,33,null],["2026_07_GB_DET",7,"2026-10-25","Sun","16:25","GB","DET",17,20,3.5,63,null],["2026_07_LA_LV",7,"2026-10-25","Sun","16:25","LA","LV",35,21,-3.5,38,null],["2026_07_KC_SEA",7,"2026-10-25","Sun","20:20","KC","SEA",3,20,3.0,59,null],["2026_07_DAL_PHI",7,"2026-10-26","Mon","20:15","DAL","PHI",38,21,-4.5,34,null],["2026_08_CAR_GB",8,"2026-10-29","Thu","20:15","CAR","GB",null,null,3.5,62,null],["2026_08_ARI_DAL",8,"2026-11-01","Sun","13:00","ARI","DAL",null,null,7.0,75,null],["2026_08_ATL_TB",8,"2026-11-01","Sun","13:00","ATL","TB",null,null,2.5,55,null],["2026_08_BAL_BUF",8,"2026-11-01","Sun","13:00","BAL","BUF",null,null,3.0,61,null],["2026_08_CLE_PIT",8,"2026-11-01","Sun","13:00","CLE","PIT",null,null,3.5,63,null],["2026_08_IND_JAX",8,"2026-11-01","Sun","13:00","IND","JAX",null,null,9.5,80,null],["2026_08_LV_NYJ",8,"2026-11-01","Sun","13:00","LV","NYJ",null,null,1.5,53,null],["2026_08_MIN_DET",8,"2026-11-01","Sun","13:00","MIN","DET",null,null,3.0,60,null],["2026_08_TEN_CIN",8,"2026-11-01","Sun","13:00","TEN","CIN",null,null,10.5,80,null],["2026_08_LAC_LA",8,"2026-11-01","Sun","16:05","LAC","LA",null,null,6.5,72,null],["2026_08_KC_DEN",8,"2026-11-01","Sun","16:25","KC","DEN",null,null,-1.5,48,null],["2026_08_NE_MIA",8,"2026-11-01","Sun","16:25","NE","MIA",null,null,-7.0,27,null],["2026_08_PHI_WAS",8,"2026-11-01","Sun","20:20","PHI","WAS",null,null,5.5,68,null],["2026_08_CHI_SEA",8,"2026-11-02","Mon","20:15","CHI","SEA",null,null,3.0,60,null],["2026_09_JAX_BAL",9,"2026-11-05","Thu","20:15","JAX","BAL",null,null,3.0,58,null],["2026_09_CIN_ATL",9,"2026-11-08","Sun","09:30","CIN","ATL",null,null,-3.0,40,"Bernabeu"],["2026_09_CLE_NO",9,"2026-11-08","Sun","13:00","CLE","NO",null,null,2.5,55,null],["2026_09_DAL_IND",9,"2026-11-08","Sun","13:00","DAL","IND",null,null,-3.5,34,null],["2026_09_DEN_CAR",9,"2026-11-08","Sun","13:00","DEN","CAR",null,null,-2.5,45,null],["2026_09_DET_MIA",9,"2026-11-08","Sun","13:00","DET","MIA",null,null,-7.0,24,null],["2026_09_LA_WAS",9,"2026-11-08","Sun","13:00","LA","WAS",null,null,-5.5,32,null],["2026_09_NYG_PHI",9,"2026-11-08","Sun","13:00","NYG","PHI",null,null,-1.5,47,null],["2026_09_NYJ_KC",9,"2026-11-08","Sun","13:00","NYJ","KC",null,null,9.5,80,null],["2026_09_HOU_LAC",9,"2026-11-08","Sun","16:05","HOU","LAC",null,null,-3.0,42,null],["2026_09_LV_SF",9,"2026-11-08","Sun","16:05","LV","SF",null,null,9.5,80,null],["2026_09_ARI_SEA",9,"2026-11-08","Sun","16:25","ARI","SEA",null,null,10.5,83,null],["2026_09_GB_NE",9,"2026-11-08","Sun","16:25","GB","NE",null,null,3.0,61,null],["2026_09_TB_CHI",9,"2026-11-08","Sun","20:20","TB","CHI",null,null,6.0,70,null],["2026_09_BUF_MIN",9,"2026-11-09","Mon","20:15","BUF","MIN",null,null,-2.5,44,null],["2026_10_WAS_NYG",10,"2026-11-12","Thu","20:15","WAS","NYG",null,null,null,null,null],["2026_10_NE_DET",10,"2026-11-15","Sun","09:30","NE","DET",null,null,null,null,"FC Bayern Munich Stadium"],["2026_10_BUF_NYJ",10,"2026-11-15","Sun","13:00","BUF","NYJ",null,null,null,null,null],["2026_10_CAR_NO",10,"2026-11-15","Sun","13:00","CAR","NO",null,null,null,null,null],["2026_10_HOU_CLE",10,"2026-11-15","Sun","13:00","HOU","CLE",null,null,null,null,null],["2026_10_JAX_TEN",10,"2026-11-15","Sun","13:00","JAX","TEN",null,null,null,null,null],["2026_10_KC_ATL",10,"2026-11-15","Sun","13:00","KC","ATL",null,null,null,null,null],["2026_10_MIA_IND",10,"2026-11-15","Sun","13:00","MIA","IND",null,null,null,null,null],["2026_10_MIN_GB",10,"2026-11-15","Sun","13:00","MIN","GB",null,null,null,null,null],["2026_10_LA_ARI",10,"2026-11-15","Sun","16:05","LA","ARI",null,null,null,null,null],["2026_10_SEA_LV",10,"2026-11-15","Sun","16:05","SEA","LV",null,null,null,null,null],["2026_10_SF_DAL",10,"2026-11-15","Sun","16:25","SF","DAL",null,null,null,null,null],["2026_10_PIT_CIN",10,"2026-11-15","Sun","20:20","PIT","CIN",null,null,null,null,null],["2026_10_LAC_BAL",10,"2026-11-16","Mon","20:15","LAC","BAL",null,null,null,null,null],["2026_11_IND_HOU",11,"2026-11-19","Thu","20:15","IND","HOU",null,null,null,null,null],["2026_11_ARI_KC",11,"2026-11-22","Sun","13:00","ARI","KC",null,null,null,null,null],["2026_11_BAL_CAR",11,"2026-11-22","Sun","13:00","BAL","CAR",null,null,null,null,null],["2026_11_JAX_NYG",11,"2026-11-22","Sun","13:00","JAX","NYG",null,null,null,null,null],["2026_11_MIA_BUF",11,"2026-11-22","Sun","13:00","MIA","BUF",null,null,null,null,null],["2026_11_NO_CHI",11,"2026-11-22","Sun","13:00","NO","CHI",null,null,null,null,null],["2026_11_TB_DET",11,"2026-11-22","Sun","13:00","TB","DET",null,null,null,null,null],["2026_11_TEN_DAL",11,"2026-11-22","Sun","13:00","TEN","DAL",null,null,null,null,null],["2026_11_NYJ_LAC",11,"2026-11-22","Sun","16:05","NYJ","LAC",null,null,null,null,null],["2026_11_LV_DEN",11,"2026-11-22","Sun","16:25","LV","DEN",null,null,null,null,null],["2026_11_PIT_PHI",11,"2026-11-22","Sun","16:25","PIT","PHI",null,null,null,null,null],["2026_11_MIN_SF",11,"2026-11-22","Sun","20:20","MIN","SF",null,null,null,null,"Estadio Banorte"],["2026_11_CIN_WAS",11,"2026-11-23","Mon","20:15","CIN","WAS",null,null,null,null,null],["2026_12_GB_LA",12,"2026-11-25","Wed","20:00","GB","LA",null,null,null,null,null],["2026_12_CHI_DET",12,"2026-11-26","Thu","13:00","CHI","DET",null,null,null,null,null],["2026_12_PHI_DAL",12,"2026-11-26","Thu","16:30","PHI","DAL",null,null,null,null,null],["2026_12_KC_BUF",12,"2026-11-26","Thu","20:20","KC","BUF",null,null,null,null,null],["2026_12_DEN_PIT",12,"2026-11-27","Fri","15:00","DEN","PIT",null,null,null,null,null],["2026_12_ATL_MIN",12,"2026-11-29","Sun","13:00","ATL","MIN",null,null,null,null,null],["2026_12_BAL_HOU",12,"2026-11-29","Sun","13:00","BAL","HOU",null,null,null,null,null],["2026_12_LV_CLE",12,"2026-11-29","Sun","13:00","LV","CLE",null,null,null,null,null],["2026_12_NO_CIN",12,"2026-11-29","Sun","13:00","NO","CIN",null,null,null,null,null],["2026_12_NYG_IND",12,"2026-11-29","Sun","13:00","NYG","IND",null,null,null,null,null],["2026_12_NYJ_MIA",12,"2026-11-29","Sun","13:00","NYJ","MIA",null,null,null,null,null],["2026_12_TEN_JAX",12,"2026-11-29","Sun","16:05","TEN","JAX",null,null,null,null,null],["2026_12_SEA_SF",12,"2026-11-29","Sun","16:25","SEA","SF",null,null,null,null,null],["2026_12_WAS_ARI",12,"2026-11-29","Sun","16:25","WAS","ARI",null,null,null,null,null],["2026_12_NE_LAC",12,"2026-11-29","Sun","20:20","NE","LAC",null,null,null,null,null],["2026_12_CAR_TB",12,"2026-11-30","Mon","20:15","CAR","TB",null,null,null,null,null],["2026_13_KC_LA",13,"2026-12-03","Thu","20:15","KC","LA",null,null,null,null,null],["2026_13_CIN_CLE",13,"2026-12-06","Sun","13:00","CIN","CLE",null,null,null,null,null],["2026_13_DET_ATL",13,"2026-12-06","Sun","13:00","DET","ATL",null,null,null,null,null],["2026_13_GB_NO",13,"2026-12-06","Sun","13:00","GB","NO",null,null,null,null,null],["2026_13_JAX_CHI",13,"2026-12-06","Sun","13:00","JAX","CHI",null,null,null,null,null],["2026_13_LAC_TB",13,"2026-12-06","Sun","13:00","LAC","TB",null,null,null,null,null],["2026_13_SF_NYG",13,"2026-12-06","Sun","13:00","SF","NYG",null,null,null,null,null],["2026_13_WAS_TEN",13,"2026-12-06","Sun","13:00","WAS","TEN",null,null,null,null,null],["2026_13_MIA_DEN",13,"2026-12-06","Sun","16:05","MIA","DEN",null,null,null,null,null],["2026_13_PHI_ARI",13,"2026-12-06","Sun","16:05","PHI","ARI",null,null,null,null,null],["2026_13_BUF_NE",13,"2026-12-06","Sun","16:25","BUF","NE",null,null,null,null,null],["2026_13_CAR_MIN",13,"2026-12-06","Sun","16:25","CAR","MIN",null,null,null,null,null],["2026_13_HOU_PIT",13,"2026-12-06","Sun","20:20","HOU","PIT",null,null,null,null,null],["2026_13_DAL_SEA",13,"2026-12-07","Mon","20:15","DAL","SEA",null,null,null,null,null],["2026_14_MIN_NE",14,"2026-12-10","Thu","20:15","MIN","NE",null,null,null,null,null],["2026_14_ATL_CLE",14,"2026-12-13","Sun","13:00","ATL","CLE",null,null,null,null,null],["2026_14_CHI_MIA",14,"2026-12-13","Sun","13:00","CHI","MIA",null,null,null,null,null],["2026_14_DEN_NYJ",14,"2026-12-13","Sun","13:00","DEN","NYJ",null,null,null,null,null],["2026_14_HOU_WAS",14,"2026-12-13","Sun","13:00","HOU","WAS",null,null,null,null,null],["2026_14_IND_PHI",14,"2026-12-13","Sun","13:00","IND","PHI",null,null,null,null,null],["2026_14_NO_CAR",14,"2026-12-13","Sun","13:00","NO","CAR",null,null,null,null,null],["2026_14_TB_BAL",14,"2026-12-13","Sun","13:00","TB","BAL",null,null,null,null,null],["2026_14_TEN_DET",14,"2026-12-13","Sun","13:00","TEN","DET",null,null,null,null,null],["2026_14_LAC_LV",14,"2026-12-13","Sun","16:05","LAC","LV",null,null,null,null,null],["2026_14_KC_CIN",14,"2026-12-13","Sun","16:25","KC","CIN",null,null,null,null,null],["2026_14_LA_SF",14,"2026-12-13","Sun","16:25","LA","SF",null,null,null,null,null],["2026_14_NYG_SEA",14,"2026-12-13","Sun","16:25","NYG","SEA",null,null,null,null,null],["2026_14_BUF_GB",14,"2026-12-13","Sun","20:20","BUF","GB",null,null,null,null,null],["2026_14_PIT_JAX",14,"2026-12-14","Mon","20:15","PIT","JAX",null,null,null,null,null],["2026_15_SF_LAC",15,"2026-12-17","Thu","20:15","SF","LAC",null,null,null,null,null],["2026_15_SEA_PHI",15,"2026-12-19","Sat","17:00","SEA","PHI",null,null,null,null,null],["2026_15_CHI_BUF",15,"2026-12-19","Sat","20:20","CHI","BUF",null,null,null,null,null],["2026_15_ATL_WAS",15,"2026-12-20","Sun","13:00","ATL","WAS",null,null,null,null,null],["2026_15_BAL_PIT",15,"2026-12-20","Sun","13:00","BAL","PIT",null,null,null,null,null],["2026_15_CIN_CAR",15,"2026-12-20","Sun","13:00","CIN","CAR",null,null,null,null,null],["2026_15_CLE_NYG",15,"2026-12-20","Sun","13:00","CLE","NYG",null,null,null,null,null],["2026_15_IND_TEN",15,"2026-12-20","Sun","13:00","IND","TEN",null,null,null,null,null],["2026_15_JAX_HOU",15,"2026-12-20","Sun","13:00","JAX","HOU",null,null,null,null,null],["2026_15_MIA_GB",15,"2026-12-20","Sun","13:00","MIA","GB",null,null,null,null,null],["2026_15_NO_TB",15,"2026-12-20","Sun","13:00","NO","TB",null,null,null,null,null],["2026_15_NYJ_ARI",15,"2026-12-20","Sun","16:05","NYJ","ARI",null,null,null,null,null],["2026_15_DAL_LA",15,"2026-12-20","Sun","16:25","DAL","LA",null,null,null,null,null],["2026_15_DEN_LV",15,"2026-12-20","Sun","16:25","DEN","LV",null,null,null,null,null],["2026_15_DET_MIN",15,"2026-12-20","Sun","20:20","DET","MIN",null,null,null,null,null],["2026_15_NE_KC",15,"2026-12-21","Mon","20:15","NE","KC",null,null,null,null,null],["2026_16_HOU_PHI",16,"2026-12-24","Thu","20:15","HOU","PHI",null,null,null,null,null],["2026_16_GB_CHI",16,"2026-12-25","Fri","13:00","GB","CHI",null,null,null,null,null],["2026_16_BUF_DEN",16,"2026-12-25","Fri","16:30","BUF","DEN",null,null,null,null,null],["2026_16_LA_SEA",16,"2026-12-25","Fri","20:15","LA","SEA",null,null,null,null,null],["2026_16_ARI_NO",16,"2026-12-27","Sun","13:00","ARI","NO",null,null,null,null,null],["2026_16_CAR_PIT",16,"2026-12-27","Sun","13:00","CAR","PIT",null,null,null,null,null],["2026_16_CIN_IND",16,"2026-12-27","Sun","13:00","CIN","IND",null,null,null,null,null],["2026_16_CLE_BAL",16,"2026-12-27","Sun","13:00","CLE","BAL",null,null,null,null,null],["2026_16_LAC_MIA",16,"2026-12-27","Sun","13:00","LAC","MIA",null,null,null,null,null],["2026_16_NE_NYJ",16,"2026-12-27","Sun","13:00","NE","NYJ",null,null,null,null,null],["2026_16_TB_ATL",16,"2026-12-27","Sun","13:00","TB","ATL",null,null,null,null,null],["2026_16_WAS_MIN",16,"2026-12-27","Sun","13:00","WAS","MIN",null,null,null,null,null],["2026_16_TEN_LV",16,"2026-12-27","Sun","16:05","TEN","LV",null,null,null,null,null],["2026_16_SF_KC",16,"2026-12-27","Sun","16:25","SF","KC",null,null,null,null,null],["2026_16_JAX_DAL",16,"2026-12-27","Sun","20:20","JAX","DAL",null,null,null,null,null],["2026_16_NYG_DET",16,"2026-12-28","Mon","20:15","NYG","DET",null,null,null,null,null],["2026_17_BAL_CIN",17,"2026-12-31","Thu","20:15","BAL","CIN",null,null,null,null,null],["2026_17_BUF_MIA",17,"2027-01-03","Sun","13:00","BUF","MIA",null,null,null,null,null],["2026_17_DEN_NE",17,"2027-01-03","Sun","13:00","DEN","NE",null,null,null,null,null],["2026_17_IND_CLE",17,"2027-01-03","Sun","13:00","IND","CLE",null,null,null,null,null],["2026_17_KC_LAC",17,"2027-01-03","Sun","13:00","KC","LAC",null,null,null,null,null],["2026_17_LA_TB",17,"2027-01-03","Sun","13:00","LA","TB",null,null,null,null,null],["2026_17_MIN_NYJ",17,"2027-01-03","Sun","13:00","MIN","NYJ",null,null,null,null,null],["2026_17_NO_ATL",17,"2027-01-03","Sun","13:00","NO","ATL",null,null,null,null,null],["2026_17_NYG_DAL",17,"2027-01-03","Sun","13:00","NYG","DAL",null,null,null,null,null],["2026_17_PIT_TEN",17,"2027-01-03","Sun","13:00","PIT","TEN",null,null,null,null,null],["2026_17_SEA_CAR",17,"2027-01-03","Sun","13:00","SEA","CAR",null,null,null,null,null],["2026_17_WAS_JAX",17,"2027-01-03","Sun","13:00","WAS","JAX",null,null,null,null,null],["2026_17_LV_ARI",17,"2027-01-03","Sun","16:05","LV","ARI",null,null,null,null,null],["2026_17_DET_CHI",17,"2027-01-03","Sun","16:25","DET","CHI",null,null,null,null,null],["2026_17_PHI_SF",17,"2027-01-03","Sun","20:20","PHI","SF",null,null,null,null,null],["2026_17_HOU_GB",17,"2027-01-04","Mon","20:15","HOU","GB",null,null,null,null,null],["2026_18_ATL_CAR",18,"2027-01-10","Sun","13:00","ATL","CAR",null,null,null,null,null],["2026_18_CHI_MIN",18,"2027-01-10","Sun","13:00","CHI","MIN",null,null,null,null,null],["2026_18_CLE_CIN",18,"2027-01-10","Sun","13:00","CLE","CIN",null,null,null,null,null],["2026_18_DAL_WAS",18,"2027-01-10","Sun","13:00","DAL","WAS",null,null,null,null,null],["2026_18_DET_GB",18,"2027-01-10","Sun","13:00","DET","GB",null,null,null,null,null],["2026_18_JAX_IND",18,"2027-01-10","Sun","13:00","JAX","IND",null,null,null,null,null],["2026_18_LAC_DEN",18,"2027-01-10","Sun","13:00","LAC","DEN",null,null,null,null,null],["2026_18_LV_KC",18,"2027-01-10","Sun","13:00","LV","KC",null,null,null,null,null],["2026_18_MIA_NE",18,"2027-01-10","Sun","13:00","MIA","NE",null,null,null,null,null],["2026_18_NYJ_BUF",18,"2027-01-10","Sun","13:00","NYJ","BUF",null,null,null,null,null],["2026_18_PHI_NYG",18,"2027-01-10","Sun","13:00","PHI","NYG",null,null,null,null,null],["2026_18_PIT_BAL",18,"2027-01-10","Sun","13:00","PIT","BAL",null,null,null,null,null],["2026_18_SEA_LA",18,"2027-01-10","Sun","13:00","SEA","LA",null,null,null,null,null],["2026_18_SF_ARI",18,"2027-01-10","Sun","13:00","SF","ARI",null,null,null,null,null],["2026_18_TB_NO",18,"2027-01-10","Sun","13:00","TB","NO",null,null,null,null,null],["2026_18_TEN_HOU",18,"2027-01-10","Sun","13:00","TEN","HOU",null,null,null,null,null]]};
+const T = DATA.teams;
+const GAMES = DATA.games.map(a => ({ id: a[0], wk: a[1], date: a[2], day: a[3], time: a[4], away: a[5], home: a[6], as: a[7], hs: a[8], spread: a[9], mkt: a[10], site: a[11] }));
+const BYID = Object.fromEntries(GAMES.map((g, i) => [g.id, Object.assign(g, { i })]));
+const DIVS = ["AFC East","AFC North","AFC South","AFC West","NFC East","NFC North","NFC South","NFC West"];
+const OPTS = [60, 70, 80, 90, 100];
+const LS_KEY = "nfl-win-picker-2026";
+
+const S = { picks: {}, useResults: true, updatedAt: 0 };
+const UI = { view: "pick", pendingImport: null, importMsg: "", recMode: "res", conf: 0, anim: false, cursor: null, tableMode: "div", team: null, dir: 1, resetArmed: false, sync: "device" };
+
+/* ---------- storage ---------- */
+// Picks saved when this site was built. Used the first time the site opens in a browser.
+const SEED = {"picks":{"2026_07_CIN_BAL":80,"2026_07_CLE_TEN":30,"2026_07_DAL_PHI":40,"2026_07_DEN_ARI":40,"2026_07_GB_DET":70,"2026_07_IND_MIN":70,"2026_07_KC_SEA":40,"2026_07_LA_LV":20,"2026_07_MIA_NYJ":60,"2026_07_NE_CHI":30,"2026_07_NYG_HOU":70,"2026_07_PIT_NO":40,"2026_07_SF_ATL":30,"2026_07_TB_CAR":50,"2026_08_ARI_DAL":60,"2026_08_ATL_TB":30,"2026_08_BAL_BUF":50,"2026_08_CAR_GB":60,"2026_08_CHI_SEA":50,"2026_08_CLE_PIT":60,"2026_08_IND_JAX":70,"2026_08_KC_DEN":40,"2026_08_LAC_LA":70,"2026_08_LV_NYJ":40,"2026_08_MIN_DET":50,"2026_08_NE_MIA":10,"2026_08_PHI_WAS":40,"2026_08_TEN_CIN":60,"2026_09_ARI_SEA":70,"2026_09_BUF_MIN":30,"2026_09_CIN_ATL":40,"2026_09_CLE_NO":40,"2026_09_DAL_IND":40,"2026_09_DEN_CAR":30,"2026_09_DET_MIA":20,"2026_09_GB_NE":50,"2026_09_HOU_LAC":30,"2026_09_JAX_BAL":50,"2026_09_LA_WAS":10,"2026_09_LV_SF":80,"2026_09_NYG_PHI":50,"2026_09_NYJ_KC":90,"2026_09_TB_CHI":70,"2026_10_BUF_NYJ":20,"2026_10_CAR_NO":40,"2026_10_HOU_CLE":40,"2026_10_JAX_TEN":20,"2026_10_KC_ATL":30,"2026_10_LAC_BAL":80,"2026_10_LA_ARI":30,"2026_10_MIA_IND":60,"2026_10_MIN_GB":50,"2026_10_NE_DET":50,"2026_10_PIT_CIN":50,"2026_10_SEA_LV":30,"2026_10_SF_DAL":30,"2026_10_WAS_NYG":50,"2026_11_ARI_KC":70,"2026_11_BAL_CAR":40,"2026_11_CIN_WAS":30,"2026_11_IND_HOU":70,"2026_11_JAX_NYG":30,"2026_11_LV_DEN":60,"2026_11_MIA_BUF":90,"2026_11_MIN_SF":60,"2026_11_NO_CHI":70,"2026_11_NYJ_LAC":70,"2026_11_PIT_PHI":30,"2026_11_TB_DET":70,"2026_11_TEN_DAL":70,"2026_12_ATL_MIN":80,"2026_12_BAL_HOU":40,"2026_12_CAR_TB":40,"2026_12_CHI_DET":50,"2026_12_DEN_PIT":40,"2026_12_GB_LA":40,"2026_12_KC_BUF":50,"2026_12_LV_CLE":70,"2026_12_NE_LAC":30,"2026_12_NO_CIN":60,"2026_12_NYG_IND":50,"2026_12_NYJ_MIA":40,"2026_12_PHI_DAL":50,"2026_12_SEA_SF":50,"2026_12_TEN_JAX":80,"2026_12_WAS_ARI":50,"2026_13_BUF_NE":40,"2026_13_CAR_MIN":80,"2026_13_CIN_CLE":50,"2026_13_DAL_SEA":70,"2026_13_DET_ATL":40,"2026_13_GB_NO":30,"2026_13_HOU_PIT":50,"2026_13_JAX_CHI":40,"2026_13_KC_LA":40,"2026_13_LAC_TB":50,"2026_13_MIA_DEN":80,"2026_13_PHI_ARI":50,"2026_13_SF_NYG":20,"2026_13_WAS_TEN":30,"2026_14_ATL_CLE":70,"2026_14_BUF_GB":40,"2026_14_CHI_MIA":40,"2026_14_DEN_NYJ":30,"2026_14_HOU_WAS":40,"2026_14_IND_PHI":40,"2026_14_KC_CIN":40,"2026_14_LAC_LV":60,"2026_14_LA_SF":60,"2026_14_MIN_NE":50,"2026_14_NO_CAR":70,"2026_14_NYG_SEA":70,"2026_14_PIT_JAX":60,"2026_14_TB_BAL":80,"2026_14_TEN_DET":80,"2026_15_ATL_WAS":40,"2026_15_BAL_PIT":40,"2026_15_CHI_BUF":60,"2026_15_CIN_CAR":50,"2026_15_CLE_NYG":40,"2026_15_DAL_LA":60,"2026_15_DEN_LV":40,"2026_15_DET_MIN":50,"2026_15_IND_TEN":40,"2026_15_JAX_HOU":30,"2026_15_MIA_GB":80,"2026_15_NE_KC":60,"2026_15_NO_TB":40,"2026_15_NYJ_ARI":60,"2026_15_SEA_PHI":30,"2026_15_SF_LAC":30,"2026_16_ARI_NO":60,"2026_16_BUF_DEN":50,"2026_16_CAR_PIT":60,"2026_16_CIN_IND":40,"2026_16_CLE_BAL":60,"2026_16_GB_CHI":50,"2026_16_HOU_PHI":40,"2026_16_JAX_DAL":40,"2026_16_LAC_MIA":40,"2026_16_LA_SEA":50,"2026_16_NE_NYJ":20,"2026_16_NYG_DET":70,"2026_16_SF_KC":50,"2026_16_TB_ATL":70,"2026_16_TEN_LV":70,"2026_16_WAS_MIN":80,"2026_17_BAL_CIN":50,"2026_17_BUF_MIA":10,"2026_17_DEN_NE":50,"2026_17_DET_CHI":60,"2026_17_HOU_GB":70,"2026_17_IND_CLE":60,"2026_17_KC_LAC":10,"2026_17_LA_TB":30,"2026_17_LV_ARI":40,"2026_17_MIN_NYJ":20,"2026_17_NO_ATL":50,"2026_17_NYG_DAL":50,"2026_17_PHI_SF":80,"2026_17_PIT_TEN":30,"2026_17_SEA_CAR":40,"2026_17_WAS_JAX":80,"2026_18_ATL_CAR":60,"2026_18_CHI_MIN":50,"2026_18_CLE_CIN":50,"2026_18_DAL_WAS":50,"2026_18_DET_GB":50,"2026_18_JAX_IND":30,"2026_18_LAC_DEN":60,"2026_18_LV_KC":80,"2026_18_MIA_NE":90,"2026_18_NYJ_BUF":90,"2026_18_PHI_NYG":50,"2026_18_PIT_BAL":50,"2026_18_SEA_LA":50,"2026_18_SF_ARI":30,"2026_18_TB_NO":60,"2026_18_TEN_HOU":50},"useResults":true};
+function clean(obj) {
+  const out = { picks: {}, useResults: obj && obj.useResults !== false, updatedAt: (obj && +obj.updatedAt) || 0 };
+  const p = (obj && obj.picks) || {};
+  for (const k in p) { const v = +p[k]; if (BYID[k] && v >= 0 && v <= 100 && v % 10 === 0) out.picks[k] = v; }
+  return out;
+}
+function loadLocal() {
+  try { const raw = localStorage.getItem(LS_KEY); return raw ? clean(JSON.parse(raw)) : null; } catch (e) { return null; }
+}
+function saveLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ ...S, cursor: UI.cursor })); } catch (e) {}
+}
+function persist() { S.updatedAt = Date.now(); saveLocal(); }
+
+/* ---------- backup and restore ---------- */
+function exportPayload() {
+  return JSON.stringify({ app: "nfl-win-picker", season: 2026, exportedAt: new Date().toISOString(),
+    useResults: S.useResults, picks: S.picks }, null, 2);
+}
+function downloadPicks() {
+  const blob = new Blob([exportPayload()], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "nfl-picks-" + new Date().toISOString().slice(0, 10) + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function readImport(file) {
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const obj = clean(JSON.parse(fr.result));
+      const n = Object.keys(obj.picks).length;
+      UI.pendingImport = n ? obj : null;
+      UI.importMsg = n ? "" : "That file has no picks this site recognizes.";
+    } catch (e) { UI.pendingImport = null; UI.importMsg = "That file isn't a picks backup. Choose the .json file you downloaded."; }
+    render();
+  };
+  fr.readAsText(file);
+}
+
+/* ---------- live scores (nflverse schedule feed) ---------- */
+const FEED_URL = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv";
+const FEED_KEY = "nfl-win-picker-2026-scores";
+const FEED_MAX_AGE = 30 * 60 * 1000;          // re-check automatically when the last check is older than this
+const FEED = { state: "idle", checkedAt: 0, newFinals: 0, error: "" };
+let DATA_VER = 0;
+
+function parseCSV(text) {
+  const rows = []; let row = [], field = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else if (c !== "\r") field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+function implied(ml) { ml = +ml; return ml < 0 ? -ml / (-ml + 100) : 100 / (ml + 100); }
+// Update each known game from a compact record: [awayScore, homeScore, date, day, time, spread, market%]
+function applyCompact(map) {
+  let finals = 0;
+  for (const id in map) {
+    const g = BYID[id]; if (!g) continue;
+    const [as, hs, date, day, time, spread, mkt] = map[id];
+    if (!played(g) && as !== null && hs !== null) finals++;
+    Object.assign(g, { as, hs, date: date || g.date, day: day || g.day, time: time || g.time, spread, mkt });
+  }
+  DATA_VER++;
+  return finals;
+}
+function compactFromCSV(text) {
+  const rows = parseCSV(text), head = rows[0] || [], ix = Object.fromEntries(head.map((h, i) => [h, i]));
+  for (const col of ["game_id", "season", "game_type", "away_score", "home_score"]) if (!(col in ix)) throw new Error("feed format changed");
+  const num = v => v === "" || v === undefined ? null : +v;
+  const map = {};
+  for (const r of rows) {
+    if (r[ix.season] !== "2026" || r[ix.game_type] !== "REG" || !BYID[r[ix.game_id]]) continue;
+    const hm = r[ix.home_moneyline], am = r[ix.away_moneyline];
+    let mkt = null;
+    if (hm && am) { const ph = implied(hm), pa = implied(am); mkt = Math.round(100 * ph / (ph + pa)); }
+    map[r[ix.game_id]] = [num(r[ix.away_score]), num(r[ix.home_score]), r[ix.gameday] || null,
+      (r[ix.weekday] || "").slice(0, 3) || null, r[ix.gametime] || null, num(r[ix.spread_line]), mkt];
+  }
+  if (Object.keys(map).length < 200) throw new Error("feed missing 2026 games");
+  return map;
+}
+function loadCachedScores() {
+  try {
+    const c = JSON.parse(localStorage.getItem(FEED_KEY) || "null");
+    if (c && c.checkedAt > DATA.builtAt && c.games) { applyCompact(c.games); FEED.checkedAt = c.checkedAt; FEED.state = "ok"; }
+  } catch (e) {}
+}
+async function refreshScores(manual) {
+  if (FEED.state === "loading") return;
+  FEED.state = "loading"; FEED.error = ""; updateFeedUI();
+  try {
+    const res = await fetch(FEED_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const map = compactFromCSV(await res.text());
+    const before = UI.cursor;
+    FEED.newFinals = applyCompact(map);
+    FEED.checkedAt = Date.now(); FEED.state = "ok";
+    try { localStorage.setItem(FEED_KEY, JSON.stringify({ checkedAt: FEED.checkedAt, games: map })); } catch (e) {}
+    if (!UI.cursor || !inQueue(BYID[UI.cursor])) UI.cursor = firstOpen();
+    if (FEED.newFinals || manual || UI.cursor !== before) render(); else updateFeedUI();
+  } catch (e) {
+    FEED.state = "error"; FEED.error = String(e && e.message || e); updateFeedUI();
+  }
+}
+function throughWeek() { let w = 0; for (const g of GAMES) if (played(g) && g.wk > w) w = g.wk; return w; }
+function whenText(ms) {
+  const d = new Date(ms), now = new Date();
+  const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return d.toDateString() === now.toDateString() ? "today " + t : d.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + t;
+}
+function feedText() {
+  const wk = throughWeek();
+  if (FEED.state === "loading") return "Checking for new scores…";
+  if (FEED.state === "error") return "Couldn't reach the score feed. Showing scores through Week " + wk + (FEED.checkedAt ? ", last checked " + whenText(FEED.checkedAt) : "") + ".";
+  if (FEED.state === "ok") return "Scores through Week " + wk + ", checked " + whenText(FEED.checkedAt) + "." + (FEED.newFinals ? " " + FEED.newFinals + " new final" + (FEED.newFinals > 1 ? "s" : "") + "." : "");
+  return "Scores through Week " + wk + ".";
+}
+function updateFeedUI() {
+  document.querySelectorAll("[data-feed-text]").forEach(el => { el.textContent = feedText(); });
+  document.querySelectorAll("[data-refresh]").forEach(b => { b.disabled = FEED.state === "loading"; });
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && Date.now() - FEED.checkedAt > FEED_MAX_AGE) refreshScores(false);
+});
+
+/* ---------- model ---------- */
+const played = g => g.hs !== null && g.as !== null;
+const locked = g => S.useResults && played(g);
+const inQueue = g => !!g && !locked(g);
+function queue() { return GAMES.filter(inQueue); }
+function firstOpen(after) {
+  const q = queue();
+  if (!q.length) return null;
+  const start = after ? q.findIndex(g => g.id === after) + 1 : 0;
+  for (let k = 0; k < q.length; k++) { const g = q[(start + k) % q.length]; if (S.picks[g.id] === undefined) return g.id; }
+  return null;
+}
+function homeShare(g) {
+  if (locked(g)) return g.hs > g.as ? 1 : g.hs < g.as ? 0 : 0.5;
+  const p = S.picks[g.id];
+  return p === undefined ? null : p / 100;
+}
+function standings() {
+  const out = {};
+  for (const t in T) out[t] = { t, w: 0, l: 0, aw: 0, al: 0, at: 0, open: 0, games: [] };
+  for (const g of GAMES) {
+    const h = homeShare(g), hs = h === null ? 0.5 : h;
+    out[g.home].w += hs; out[g.home].l += 1 - hs; out[g.away].w += 1 - hs; out[g.away].l += hs;
+    if (h === null) { out[g.home].open++; out[g.away].open++; }
+    if (S.useResults && played(g)) {
+      const hw = g.hs > g.as, tie = g.hs === g.as;
+      if (tie) { out[g.home].at++; out[g.away].at++; }
+      else { out[hw ? g.home : g.away].aw++; out[hw ? g.away : g.home].al++; }
+    }
+    out[g.home].games.push(g); out[g.away].games.push(g);
+  }
+  return out;
+}
+function record(r) { return r.aw + "–" + r.al + (r.at ? "–" + r.at : ""); }
+function actualRecords() {
+  const st = standings(); const o = {};
+  for (const t in st) o[t] = record(st[t]);
+  return o;
+}
+
+
+/* ---------- playoff engine (NFL tie-breaking procedures) ---------- */
+const TEAMS = Object.keys(T).sort();
+const TI = Object.fromEntries(TEAMS.map((t, i) => [t, i]));
+const NT = TEAMS.length, NG = GAMES.length, EPS = 1e-9;
+const CONF = TEAMS.map(t => T[t].div.startsWith("AFC") ? 0 : 1);
+const DIVI = TEAMS.map(t => DIVS.indexOf(T[t].div));
+const GH = GAMES.map(g => TI[g.home]), GA = GAMES.map(g => TI[g.away]);
+const TG = TEAMS.map(() => []);                      // per team: [game, isHome, opponent]
+GAMES.forEach((g, i) => { TG[GH[i]].push([i, 1, GA[i]]); TG[GA[i]].push([i, 0, GH[i]]); });
+const OPPS = TG.map(list => new Set(list.map(x => x[2])));
+
+function seasonFrom(h) {
+  const W = new Float64Array(NT);
+  for (let i = 0; i < NG; i++) { W[GH[i]] += h[i]; W[GA[i]] += 1 - h[i]; }
+  return { h, W };
+}
+const share = (s, x) => x[1] ? s.h[x[0]] : 1 - s.h[x[0]];
+function pctVs(s, t, keep) {
+  let w = 0, n = 0;
+  for (const x of TG[t]) if (keep(x[2])) { w += share(s, x); n++; }
+  return n ? w / n : 0;
+}
+function h2hNet(s, t, u) {            // >0: t beat u, <0: lost, 0: split or never played
+  let w = 0, n = 0;
+  for (const x of TG[t]) if (x[2] === u) { w += share(s, x); n++; }
+  return n ? w - n / 2 : 0;
+}
+const playedAll = set => set.every(t => set.some(u => u !== t && OPPS[t].has(u)));
+function commonPrep(set) {
+  let c = null;
+  for (const t of set) c = c ? new Set([...c].filter(o => OPPS[t].has(o))) : new Set(OPPS[t]);
+  const counts = set.map(t => TG[t].filter(x => c.has(x[2])).length);
+  return { c, counts };
+}
+const ST = {
+  h2h:    { name: "head-to-head", applies: (s, set) => playedAll(set), val: (s, t, set) => pctVs(s, t, o => set.includes(o)) },
+  sweep:  { name: "head-to-head sweep",
+            val: (s, t, set) => {
+              const others = set.filter(u => u !== t);
+              if (others.every(u => h2hNet(s, t, u) > EPS)) return 1;
+              if (others.every(u => h2hNet(s, t, u) < -EPS)) return -1;
+              return 0;
+            } },
+  div:    { name: "division record", val: (s, t) => pctVs(s, t, o => DIVI[o] === DIVI[t]) },
+  conf:   { name: "conference record", val: (s, t) => pctVs(s, t, o => CONF[o] === CONF[t]) },
+  common: { name: "common games", prep: (s, set) => commonPrep(set), applies: (s, set, ctx) => ctx.counts.every(n => n >= 1),
+            val: (s, t, set, ctx) => pctVs(s, t, o => ctx.c.has(o)) },
+  common4:{ name: "common games", prep: (s, set) => commonPrep(set), applies: (s, set, ctx) => ctx.counts.every(n => n >= 4),
+            val: (s, t, set, ctx) => pctVs(s, t, o => ctx.c.has(o)) },
+  sov:    { name: "strength of victory", val: (s, t) => {
+              let num = 0, den = 0;
+              for (const x of TG[t]) { const w = share(s, x); num += w * s.W[x[2]]; den += w * 17; }
+              return den ? num / den : 0;
+            } },
+  sos:    { name: "strength of schedule", val: (s, t) => { let n = 0; for (const x of TG[t]) n += s.W[x[2]]; return n / (17 * TG[t].length); } },
+};
+const DIV_STEPS = [ST.h2h, ST.div, ST.common, ST.conf, ST.sov, ST.sos];
+const WC2_STEPS = [ST.h2h, ST.conf, ST.common4, ST.sov, ST.sos];
+const WC3_STEPS = [ST.sweep, ST.conf, ST.common4, ST.sov, ST.sos];
+const divSteps = () => DIV_STEPS;
+const wcSteps = set => set.length === 2 ? WC2_STEPS : WC3_STEPS;
+
+// One club advances; if a step only trims the group, the rest go back to step 1.
+function breakTie(s, set, stepsFor, rnd) {
+  for (;;) {
+    if (set.length === 1) return [set[0], null];
+    let trimmed = null;
+    for (const st of stepsFor(set)) {
+      const ctx = st.prep ? st.prep(s, set) : null;
+      if (st.applies && !st.applies(s, set, ctx)) continue;
+      const vals = set.map(t => st.val(s, t, set, ctx));
+      const mx = Math.max(...vals);
+      const top = set.filter((t, i) => vals[i] >= mx - EPS);
+      if (top.length === 1) return [top[0], st.name];
+      if (top.length < set.length) { trimmed = top; break; }
+    }
+    if (trimmed) { set = trimmed; continue; }
+    // Point-based steps need scores that simulated games don't have, so a coin toss decides.
+    const pick = rnd ? set[Math.floor(rnd() * set.length)] : set.slice().sort((a, b) => a - b)[0];
+    return [pick, "coin toss"];
+  }
+}
+function rankPool(s, pool, stepsFor, rnd, divRank, limit, why) {
+  pool = pool.slice();
+  const order = [];
+  while (pool.length && order.length < limit) {
+    let mx = -Infinity;
+    for (const t of pool) if (s.W[t] > mx) mx = s.W[t];
+    let tied = pool.filter(t => s.W[t] >= mx - EPS);
+    if (divRank && tied.length > 1) {                // only the top club from each division moves on
+      const best = {};
+      for (const t of tied) if (best[DIVI[t]] === undefined || divRank[t] < divRank[best[DIVI[t]]]) best[DIVI[t]] = t;
+      tied = Object.values(best);
+    }
+    const [w, reason] = tied.length === 1 ? [tied[0], null] : breakTie(s, tied, stepsFor, rnd);
+    if (why && reason) why[w] = { reason, over: tied.filter(t => t !== w) };
+    order.push(w);
+    pool.splice(pool.indexOf(w), 1);
+  }
+  return order;
+}
+function seedSeason(s, rnd, full) {
+  const divRank = new Int8Array(NT), divOrder = [], divWhy = full ? {} : null, seedWhy = full ? {} : null;
+  for (let d = 0; d < 8; d++) {
+    const ts = TEAMS.map((t, i) => i).filter(i => DIVI[i] === d);
+    const o = rankPool(s, ts, divSteps, rnd, null, 4, full ? {} : null);
+    o.forEach((t, k) => { divRank[t] = k; });
+    if (full) { const w = rankPool(s, ts, divSteps, rnd, null, 1, divWhy); }
+    divOrder.push(o);
+  }
+  const seeds = [0, 1].map(c => {
+    const winners = [0, 1, 2, 3].map(k => divOrder[c * 4 + k][0]);
+    const top = rankPool(s, winners, wcSteps, rnd, null, 4, seedWhy);
+    const rest = TEAMS.map((t, i) => i).filter(i => CONF[i] === c && !winners.includes(i));
+    const wc = rankPool(s, rest, wcSteps, rnd, divRank, full ? 12 : 3, seedWhy);
+    return top.concat(wc);
+  });
+  return { seeds, divWhy, seedWhy };
+}
+function expectedSeason() {
+  const h = new Float64Array(NG);
+  GAMES.forEach((g, i) => { const v = homeShare(g); h[i] = v === null ? 0.5 : v; });
+  return seasonFrom(h);
+}
+
+/* ---------- season simulation ---------- */
+const SIMS = 10000;
+const SIM = { key: null, tally: null, done: 0, token: 0 };
+const simKey = () => JSON.stringify([DATA_VER, S.useResults, S.picks]);
+function ensureSim() {
+  const key = simKey();
+  if (SIM.key === key) return;
+  SIM.key = key; SIM.tally = null; SIM.done = 0;
+  const token = ++SIM.token;
+  const fixed = new Uint8Array(NG), base = new Float64Array(NG), prob = new Float64Array(NG);
+  GAMES.forEach((g, i) => {
+    if (locked(g)) { fixed[i] = 1; base[i] = homeShare(g); }
+    else { const p = S.picks[g.id]; prob[i] = p === undefined ? 0.5 : p / 100; }
+  });
+  const tally = { n: 0, po: new Uint32Array(NT), div: new Uint32Array(NT), bye: new Uint32Array(NT) };
+  const h = new Float64Array(NG);
+  const chunk = () => {
+    if (token !== SIM.token) return;
+    const end = Math.min(SIMS, tally.n + 250);
+    for (; tally.n < end; tally.n++) {
+      for (let i = 0; i < NG; i++) h[i] = fixed[i] ? base[i] : (Math.random() < prob[i] ? 1 : 0);
+      const { seeds } = seedSeason(seasonFrom(h), Math.random, false);
+      for (const list of seeds) list.forEach((t, k) => { tally.po[t]++; if (k < 4) tally.div[t]++; if (k === 0) tally.bye[t]++; });
+    }
+    SIM.done = tally.n;
+    const bar = document.getElementById("simfill");
+    if (bar) bar.style.width = (100 * tally.n / SIMS) + "%";
+    if (tally.n < SIMS) setTimeout(chunk, 0);
+    else { SIM.tally = tally; if (UI.view === "po") render(); }
+  };
+  setTimeout(chunk, 0);
+}
+function fmtOdds(c, n) {
+  if (c === n) return "100%";
+  if (c === 0) return "0%";
+  const v = 100 * c / n;
+  return v < 1 ? "<1%" : v > 99 ? ">99%" : Math.round(v) + "%";
+}
+
+/* ---------- formatting ---------- */
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDate(g) { const [, m, d] = g.date.split("-"); return g.day + ", " + MONTHS[+m - 1] + " " + (+d); }
+function fmtTime(t) {
+  if (!t) return "TBD";
+  let [h, m] = t.split(":").map(Number); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12;
+  return h + ":" + String(m).padStart(2, "0") + " " + ap + " ET";
+}
+function fmtSpread(g) {
+  if (g.spread === null) return "";
+  if (g.spread === 0) return "Pick’em";
+  const fav = g.spread > 0 ? g.home : g.away;
+  return fav + " −" + Math.abs(g.spread);
+}
+function fmtMarket(g) {
+  if (g.mkt === null) return "";
+  return g.mkt >= 50 ? g.home + " " + g.mkt + "%" : g.away + " " + (100 - g.mkt) + "%";
+}
+function teamVars(t) {
+  const d = T[t];
+  return `--tbg:${d.bg};--tfg:${d.fg};--ring:${d.ring};--ui-l:${d.ui};--ui-d:${d.uiD};--uit-l:${d.uiT};--uit-d:${d.uiDT}`;
+}
+function badge(t, cls = "") { return `<span class="badge ${cls}" style="${teamVars(t)}" aria-hidden="true">${t}</span>`; }
+const fx = (n) => (Math.round(n * 10) / 10).toFixed(1);
+
+/* ---------- views ---------- */
+const $ = id => document.getElementById(id);
+function renderTop() {
+  const q = queue(); const n = q.filter(g => S.picks[g.id] !== undefined).length;
+  $("count").innerHTML = `<b>${n}</b> of ${q.length} picked`;
+  $("fill").style.width = (q.length ? (100 * n / q.length) : 100) + "%";
+}
+
+function renderPick() {
+  const q = queue();
+  if (!UI.cursor || !inQueue(BYID[UI.cursor])) UI.cursor = firstOpen() || (q[0] && q[0].id);
+  const g = BYID[UI.cursor];
+  const weeks = [...new Set(q.map(x => x.wk))];
+  const recs = S.useResults ? actualRecords() : null;
+  const allDone = !firstOpen();
+
+  const chips = weeks.map(w => {
+    const wg = q.filter(x => x.wk === w), done = wg.every(x => S.picks[x.id] !== undefined);
+    return `<button class="wk${done ? " done" : ""}${g && g.wk === w ? " on" : ""}" data-wk="${w}" type="button" aria-label="Week ${w}${done ? ", all picked" : ""}"><span><small>Wk</small>${w}</span></button>`;
+  }).join("");
+
+  if (!g) { $("view").innerHTML = `<p class="note">No games left to pick.</p>`; return; }
+  const wkGames = q.filter(x => x.wk === g.wk), pos = wkGames.indexOf(g) + 1, qi = q.indexOf(g);
+  const pick = S.picks[g.id];
+  const A = T[g.away], H = T[g.home];
+  const showScore = !S.useResults ? false : played(g);
+  const meta = [];
+  if (g.site) meta.push(`At <b>${g.site}</b>`);
+  if (fmtSpread(g)) meta.push(`Line <b>${fmtSpread(g)}</b>`);
+  if (fmtMarket(g)) meta.push(`Market <b>${fmtMarket(g)}</b>`);
+
+  const side = (t, d, score) => `
+    <div class="side">
+      ${badge(t)}
+      <div><div class="nick">${d.nick}</div><div class="loc">${d.loc}</div></div>
+      ${recs ? `<div class="rec num">${recs[t]}</div>` : ""}
+      ${showScore ? `<div class="score num">${score}</div>` : ""}
+    </div>`;
+  const col = (t, isHome) => `
+    <div class="col">
+      <div class="col-cap">${t} wins</div>
+      ${OPTS.map((v, k) => {
+        const hp = isHome ? v : 100 - v;
+        return `<button class="opt${pick === hp ? " sel" : ""}" data-p="${hp}" style="${teamVars(t)};--s:${k + 1}" type="button" aria-label="${T[t].nick} ${v} percent" aria-pressed="${pick === hp}">${v}<span>%</span></button>`;
+      }).join("")}
+    </div>`;
+
+  $("view").innerHTML = `
+    <div class="ask">
+      ${allDone ? `<div class="banner"><p>Every game is picked.</p><button type="button" data-go="table">See win totals</button></div>` : ""}
+      <nav class="weeks" id="weeks" aria-label="Weeks">${chips}</nav>
+      <article class="card ${UI.anim ? (UI.dir > 0 ? "enter" : "enter-back") : ""}" aria-live="polite">
+        <div class="card-head">
+          <button class="nav" data-step="-1" type="button" aria-label="Previous game" ${qi <= 0 ? "disabled" : ""}>‹</button>
+          <div class="when"><b>Week ${g.wk}</b> · Game ${pos} of ${wkGames.length}<br>${fmtDate(g)} · ${fmtTime(g.time)}</div>
+          <button class="nav" data-step="1" type="button" aria-label="Next game" ${qi >= q.length - 1 ? "disabled" : ""}>›</button>
+        </div>
+        <div class="teams">
+          ${side(g.away, A, g.as)}
+          <div class="at">${g.site ? "vs" : "@"}</div>
+          ${side(g.home, H, g.hs)}
+        </div>
+        ${meta.length ? `<div class="meta">${meta.map(m => `<span>${m}</span>`).join("")}</div>` : ""}
+      </article>
+      <p class="ask-q">Who wins, and how sure are you?</p>
+      <button class="toss${pick === 50 ? " sel" : ""}" data-p="50" type="button" aria-pressed="${pick === 50}">Toss-up · 50/50</button>
+      <div class="cols">${col(g.away, false)}${col(g.home, true)}</div>
+      <div class="foot">
+        <button class="link" data-clear type="button" ${pick === undefined ? "disabled" : ""}>Clear pick</button>
+        <button class="link accent" data-skip type="button">${allDone ? "Next game ›" : "Skip for now ›"}</button>
+      </div>
+    </div>`;
+  UI.anim = false;
+  const on = document.querySelector(".wk.on");
+  if (on) { const w = $("weeks"); w.scrollLeft = on.offsetLeft - w.clientWidth / 2 + on.clientWidth / 2; }
+}
+
+function renderTable() {
+  const st = standings();
+  const seedOf = {};
+  seedSeason(expectedSeason(), null, false).seeds.forEach(list => list.forEach((i, k) => { seedOf[TEAMS[i]] = k + 1; }));
+  const rows = Object.values(st);
+  const q = queue(), open = q.filter(g => S.picks[g.id] === undefined).length;
+  const rowHtml = (r, rank) => {
+    const d = T[r.t];
+    return `<button class="row" data-team="${r.t}" type="button" style="${teamVars(r.t)}">
+      <span class="rank num">${rank}</span>
+      ${badge(r.t, "sm")}
+      <span class="row-name">
+        <strong>${d.nick} <em>${S.useResults ? record(r) : d.loc}</em>${seedOf[r.t] ? `<span class="seedtag" title="Projected playoff seed">${seedOf[r.t]} seed</span>` : ""}</strong>
+        <span class="bar"><i style="width:${(100 * r.w / 17).toFixed(1)}%"></i></span>
+      </span>
+      <span class="proj num"><b>${fx(r.w)}</b><span>–${fx(r.l)}</span>${r.open ? `<small>${r.open} unpicked</small>` : ""}</span>
+    </button>`;
+  };
+  let body = "";
+  if (UI.tableMode === "div") {
+    body = DIVS.map(dv => {
+      const list = rows.filter(r => T[r.t].div === dv).sort((a, b) => b.w - a.w || a.t.localeCompare(b.t));
+      return `<section class="group"><div class="group-h">${dv}<small>Projected W–L</small></div>${list.map((r, i) => rowHtml(r, i + 1)).join("")}</section>`;
+    }).join("");
+  } else {
+    for (const conf of ["AFC", "NFC"]) {
+      const list = rows.filter(r => T[r.t].div.startsWith(conf)).sort((a, b) => b.w - a.w || a.t.localeCompare(b.t));
+      body += `<section class="group"><div class="group-h">${conf}<small>Projected W–L</small></div>${list.map((r, i) => rowHtml(r, i + 1)).join("")}</section>`;
+    }
+  }
+  $("view").innerHTML = `
+    <div class="ask">
+      <div class="seg" role="tablist">
+        <button type="button" data-mode="div" class="${UI.tableMode === "div" ? "on" : ""}">Divisions</button>
+        <button type="button" data-mode="conf" class="${UI.tableMode === "conf" ? "on" : ""}">Conferences</button>
+      </div>
+      <p class="note">${S.useResults ? `Real results through Week ${throughWeek()} are counted. ` : ""}${open ? `<b>${open}</b> games still unpicked count as 50/50.` : `Every game is picked.`} Tap a team to see its schedule.</p>
+      ${body}
+      <section class="settings">
+        <div class="set-row">
+          <p>Count real results<small>Finished games count 100% for the winner. Turn off to use your own picks for every game.</small></p>
+          <label class="tog"><input type="checkbox" id="opt-results" ${S.useResults ? "checked" : ""} aria-label="Count real results"><span class="switch"></span></label>
+        </div>
+        <div class="set-row">
+          <p>Scores<small data-feed-text>${feedText()}</small></p>
+          <button type="button" class="danger" data-refresh ${FEED.state === "loading" ? "disabled" : ""}>Refresh</button>
+        </div>
+        <div class="set-row">
+          <p>Back up picks<small>Picks save in this browser only. Download a backup to keep them safe or move them to another device.</small></p>
+          <button type="button" class="danger" id="export">Download</button>
+        </div>
+        <div class="set-row">
+          <p>Restore picks<small>${UI.pendingImport ? `Replace your ${Object.keys(S.picks).length} picks with the ${Object.keys(UI.pendingImport.picks).length} in this file?` : UI.importMsg || "Load a backup file you downloaded."}</small></p>
+          ${UI.pendingImport
+            ? `<span class="btns"><button type="button" class="danger" id="import-cancel">Cancel</button><button type="button" class="danger arm" id="import-yes">Replace</button></span>`
+            : `<label class="danger filebtn">Choose file<input type="file" id="import-file" accept=".json,application/json"></label>`}
+        </div>
+        <div class="set-row">
+          <p>Start over<small>Clears your ${GAMES.filter(g => !played(g) && S.picks[g.id] !== undefined).length} picks for games not played yet. Picks on finished games stay in your record.</small></p>
+          <button type="button" class="danger${UI.resetArmed ? " arm" : ""}" id="reset">${UI.resetArmed ? "Tap again to erase" : "Reset picks"}</button>
+        </div>
+      </section>
+
+    </div>`;
+}
+
+function renderPlayoffs() {
+  ensureSim();
+  const s = expectedSeason();
+  const r = seedSeason(s, null, true);
+  const c = UI.conf, order = r.seeds[c], cname = c ? "NFC" : "AFC";
+  const tally = SIM.tally;
+  const odds = (arr, i) => tally ? fmtOdds(arr[i], tally.n) : "…";
+  const proj = i => fx(s.W[i]) + "–" + fx(17 - s.W[i]);
+  const nick = i => T[TEAMS[i]].nick;
+  const whyText = i => {
+    const k = order.indexOf(i), out = [];
+    const line = (w, what) => `<span class="why">${what} over ${w.over.map(o => TEAMS[o]).join(", ")} on ${w.reason}</span>`;
+    if (k < 4 && r.divWhy[i]) out.push(line(r.divWhy[i], "Won division"));
+    if (r.seedWhy[i]) out.push(line(r.seedWhy[i], k < 4 ? "Seeded ahead" : k < 7 ? "Won wild card" : "Ranked ahead"));
+    return out.join("");
+  };
+  const row = (i, k) => {
+    const t = TEAMS[i], seed = k + 1, out = seed > 7;
+    const tag = seed === 1 ? `<span class="tag bye">Bye</span>` : seed <= 4 ? `<span class="tag dw">${T[t].div.split(" ")[1]} champ</span>` : seed <= 7 ? `<span class="tag">Wild card</span>` : "";
+    return `<button class="seed-row${out ? " out" : ""}" type="button" data-team="${t}">
+      <span class="seed-n num">${seed}</span>${badge(t, "sm")}
+      <span class="seed-name"><strong>${T[t].nick}${tag}</strong>
+        <span class="sub num">Projected ${proj(i)}</span>${whyText(i)}</span>
+      <span class="odds num">${odds(tally ? tally.po : null, i)}<small>Playoffs</small></span>
+    </button>`;
+  };
+  const side = (k, home) => {
+    const i = order[k], t = TEAMS[i];
+    return `<div class="mu-side${home ? " h" : ""}">${home ? "" : badge(t, "xs")}<span><b>${nick(i)}</b><small>${k + 1} seed</small></span>${home ? badge(t, "xs") : ""}</div>`;
+  };
+  const mus = [[6, 1], [5, 2], [4, 3]].map(([a, h]) => `<div class="mu">${side(a, false)}<span class="mu-at">at</span>${side(h, true)}</div>`).join("");
+  const confTeams = TEAMS.map((t, i) => i).filter(i => CONF[i] === c);
+  const sorted = confTeams.slice().sort((a, b) => tally ? (tally.po[b] - tally.po[a] || s.W[b] - s.W[a]) : s.W[b] - s.W[a]);
+  const cell = (arr, i) => {
+    const p = tally ? arr[i] / tally.n : 0;
+    return `<td class="heat num" style="--p:${p.toFixed(3)}">${odds(arr, i)}</td>`;
+  };
+  const table = sorted.map(i => `<tr data-team="${TEAMS[i]}"><td><span class="tm">${badge(TEAMS[i], "xs")}${nick(i)}</span></td>
+      <td class="num">${fx(s.W[i])}</td>${cell(tally && tally.po, i)}${cell(tally && tally.div, i)}${cell(tally && tally.bye, i)}</tr>`).join("");
+  const open = queue().filter(g => S.picks[g.id] === undefined).length;
+
+  $("view").innerHTML = `
+    <div class="ask">
+      <div class="seg" role="tablist">
+        <button type="button" data-conf="0" class="${c === 0 ? "on" : ""}">AFC</button>
+        <button type="button" data-conf="1" class="${c === 1 ? "on" : ""}">NFC</button>
+      </div>
+      <p class="note">Seeds come from your projected records. Division champions take seeds 1–4, and the three best other teams are wild cards. Ties are broken with the NFL's tiebreakers.${open ? ` <b>${open}</b> unpicked games count as 50/50.` : ""}</p>
+      <section>
+        <div class="sec-h">${cname} seeds<small>Playoff odds</small></div>
+        ${order.slice(0, 7).map(row).join("")}
+        <div class="cutline">Out of the playoffs</div>
+        ${order.slice(7, 10).map((i, k) => row(i, k + 7)).join("")}
+      </section>
+      <section>
+        <div class="sec-h">Wild Card Round<small>Higher seed hosts</small></div>
+        <div class="mus">
+          <div class="mu bye">${badge(TEAMS[order[0]], "xs")}<span><b style="font-family:var(--display);font-weight:800;font-size:18px;text-transform:uppercase;color:var(--ink)">${nick(order[0])}</b> · 1 seed, first-round bye</span></div>
+          ${mus}
+        </div>
+      </section>
+      <section>
+        <div class="sec-h">${cname} playoff odds<small>${tally ? SIMS.toLocaleString() + " seasons" : "Simulating"}</small></div>
+        ${tally ? "" : `<div class="simbar"><i id="simfill" style="width:${100 * SIM.done / SIMS}%"></i></div>`}
+        <div class="tblwrap"><table class="oddtab">
+          <thead><tr><th>Team</th><th>Proj W</th><th>Playoffs</th><th>Division</th><th>1 seed</th></tr></thead>
+          <tbody>${table}</tbody>
+        </table></div>
+        <p class="fine">Odds come from ${SIMS.toLocaleString()} seasons played out with your percentages, seeded with the same tiebreakers. Simulated games have no scores, so the point-based tiebreakers are skipped and a coin toss decides.</p>
+      </section>
+    </div>`;
+}
+
+/* ---------- pick record ---------- */
+function grade(g) {
+  const p = S.picks[g.id];
+  if (p === undefined || !played(g)) return null;
+  const tie = g.hs === g.as, homeWon = g.hs > g.as;
+  const side = p > 50 ? g.home : p < 50 ? g.away : null;
+  const conf = Math.max(p, 100 - p);
+  let res = "N";
+  if (side && !tie) res = (side === g.home) === homeWon ? "R" : "X";
+  return { g, p, side, conf, res };
+}
+function renderRecord() {
+  const graded = GAMES.map(grade).filter(Boolean);
+  const upcoming = GAMES.filter(g => !played(g) && S.picks[g.id] !== undefined);
+  const unpicked = GAMES.filter(g => !played(g) && S.picks[g.id] === undefined).length;
+  const scored = graded.filter(x => x.res !== "N");
+  const right = scored.filter(x => x.res === "R").length, wrong = scored.length - right;
+  const expected = scored.reduce((a, x) => a + x.conf / 100, 0);
+  const tossups = graded.filter(x => x.side === null).length;
+  const mode = UI.recMode;
+
+  const pickCell = x => x.side
+    ? `<span class="pk-you">${badge(x.side, "xs")}<span class="num">${x.conf}%</span></span>`
+    : `<span class="pk-you"><span>50/50</span></span>`;
+  const line = (t, score, lose) => `<span class="ln${lose ? " lose" : ""}">${badge(t, "xs")}${T[t].nick}${score !== undefined ? `<b class="num">${score}</b>` : ""}</span>`;
+  const byWeek = (list, desc) => {
+    const wks = [...new Set(list.map(x => (x.g || x).wk))].sort((a, b) => desc ? b - a : a - b);
+    return wks.map(w => ({ w, items: list.filter(x => (x.g || x).wk === w) }));
+  };
+
+  let body = "";
+  if (mode === "res") {
+    const lvls = [60, 70, 80, 90, 100].map(l => {
+      const xs = scored.filter(x => x.conf === l), r = xs.filter(x => x.res === "R").length;
+      return { l, n: xs.length, r };
+    }).filter(c => c.n);
+    body = graded.length ? `
+      <div class="score-card">
+        <div class="big num">${right}–${wrong}<small>Right–wrong</small></div>
+        <div class="stat">You expected <b class="num">${fx(expected)}</b> right from your percentages.</div>
+        <div class="stat"><b class="num">${scored.length ? Math.round(100 * right / scored.length) : 0}%</b> of picks correct${tossups ? ` · <b>${tossups}</b> toss-up${tossups > 1 ? "s" : ""} not counted` : ""}.</div>
+        <div class="stat">Finished games count 100% for the winner in your totals.</div>
+      </div>
+      ${lvls.length ? `<section>
+        <div class="sec-h">How sure vs. how right<small>Line = your %</small></div>
+        <div class="cal">${lvls.map(c => `
+          <div class="cal-row">
+            <span class="cal-lvl num">${c.l}%</span>
+            <span class="cal-track" aria-label="${c.r} of ${c.n} right at ${c.l} percent"><i style="width:${(100 * c.r / c.n).toFixed(1)}%"></i><u style="left:${c.l}%"></u></span>
+            <span class="cal-n num">${Math.round(100 * c.r / c.n)}%<small>${c.r} of ${c.n}</small></span>
+          </div>`).join("")}</div>
+      </section>` : ""}
+      ${byWeek(graded, true).map(({ w, items }) => {
+        const r = items.filter(x => x.res === "R").length, x2 = items.filter(x => x.res === "X").length;
+        return `<section><div class="sec-h">Week ${w}<small class="num">${r}–${x2}</small></div>
+          ${items.map(x => {
+            const g = x.g, hw = g.hs > g.as, aw = g.as > g.hs;
+            const lbl = x.res === "R" ? "Right" : x.res === "X" ? "Wrong" : "Not graded";
+            return `<div class="pk">
+              <span class="mark ${x.res}" role="img" aria-label="${lbl}">${x.res === "R" ? "✓" : x.res === "X" ? "✗" : "–"}</span>
+              <span class="pk-mu">${line(g.away, g.as, !aw)}${line(g.home, g.hs, !hw)}</span>
+              ${pickCell(x)}
+            </div>`;
+          }).join("")}</section>`;
+      }).join("")}` : `<div class="empty"><b>No results yet</b>Picks get graded here once their games are final.</div>`;
+  } else {
+    body = upcoming.length ? byWeek(upcoming, false).map(({ w, items }) => `
+      <section><div class="sec-h">Week ${w}<small class="num">${items.length} picked</small></div>
+        ${items.map(g => {
+          const x = { side: S.picks[g.id] > 50 ? g.home : S.picks[g.id] < 50 ? g.away : null, conf: Math.max(S.picks[g.id], 100 - S.picks[g.id]) };
+          return `<button class="pk" type="button" data-goto="${g.id}">
+            <span class="mark N" aria-hidden="true">›</span>
+            <span class="pk-mu">${line(g.away)}${line(g.home)}<small>${fmtDate(g)} · ${fmtTime(g.time)}</small></span>
+            ${pickCell(x)}
+          </button>`;
+        }).join("")}</section>`).join("")
+      : `<div class="empty"><b>Nothing picked yet</b>Picks for upcoming games show up here.</div>`;
+  }
+
+  $("view").innerHTML = `
+    <div class="ask">
+      <div class="seg" role="tablist">
+        <button type="button" data-rec="res" class="${mode === "res" ? "on" : ""}">Results · ${graded.length}</button>
+        <button type="button" data-rec="up" class="${mode === "up" ? "on" : ""}">Upcoming · ${upcoming.length}</button>
+      </div>
+      ${mode === "up" && unpicked ? `<p class="note"><b>${unpicked}</b> upcoming games still need a pick. Tap a game to change your pick.</p>` : ""}
+      ${mode === "res" ? `<div class="feedline"><p class="note" data-feed-text>${feedText()}</p><button type="button" class="danger" data-refresh ${FEED.state === "loading" ? "disabled" : ""}>Refresh</button></div><p class="note">Your original picks are kept even after the game is final.</p>` : ""}
+      ${body}
+    </div>`;
+}
+
+function renderSheet() {
+  const root = $("sheet-root");
+  if (!UI.team) { root.innerHTML = ""; return; }
+  const t = UI.team, d = T[t], r = standings()[t];
+  const rows = r.games.map(g => {
+    const home = g.home === t, opp = home ? g.away : g.home;
+    let right;
+    if (locked(g)) {
+      const my = home ? g.hs : g.as, their = home ? g.as : g.hs, res = my > their ? "W" : my < their ? "L" : "T";
+      right = `<span class="chip ${res}">${res}</span> <span class="num">${my}–${their}</span>`;
+    } else {
+      const h = homeShare(g);
+      right = h === null ? `<span class="unp">Pick</span>` : `<span class="num">${Math.round(100 * (home ? h : 1 - h))}%</span>`;
+    }
+    return `<button class="g" type="button" data-goto="${locked(g) ? "" : g.id}" ${locked(g) ? "disabled" : ""}>
+      <span class="w">W${g.wk}</span>${badge(opp, "xs")}
+      <span class="o">${home ? "vs" : "@"} ${T[opp].nick} <em>· ${locked(g) && S.picks[g.id] !== undefined ? `you had ${home ? S.picks[g.id] : 100 - S.picks[g.id]}%` : fmtDate(g)}</em></span>
+      <span class="r">${right}</span>
+    </button>`;
+  }).join("");
+  root.innerHTML = `
+    <div class="scrim" data-close></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="${d.loc} ${d.nick} schedule">
+      <div class="sheet-in">
+        <div class="sheet-h">
+          ${badge(t, "")}
+          <div><h2>${d.nick}</h2><p class="num">Projected ${fx(r.w)}–${fx(r.l)}${S.useResults ? ` · Now ${record(r)}` : ""}</p></div>
+          <button class="x" type="button" data-close aria-label="Close">✕</button>
+        </div>
+        <div class="sched">${rows}</div>
+      </div>
+    </div>`;
+}
+
+function render() {
+  renderTop();
+  for (const [id, v] of [["tab-pick", "pick"], ["tab-table", "table"], ["tab-po", "po"], ["tab-rec", "rec"]]) {
+    $(id).classList.toggle("on", UI.view === v);
+    $(id).setAttribute("aria-current", UI.view === v);
+  }
+  if (UI.view === "pick") renderPick(); else if (UI.view === "table") renderTable(); else if (UI.view === "po") renderPlayoffs(); else renderRecord();
+  renderSheet();
+}
+
+/* ---------- actions ---------- */
+let busy = false;
+function choose(p) {
+  if (busy) return;
+  const id = UI.cursor; if (!id) return;
+  S.picks[id] = p; persist();
+  const btn = document.querySelector(`[data-p="${p}"]`);
+  document.querySelectorAll(".opt.sel, .toss.sel").forEach(b => b.classList.remove("sel"));
+  if (btn) btn.classList.add("sel");
+  renderTop();
+  busy = true;
+  setTimeout(() => {
+    busy = false;
+    const next = firstOpen(id);
+    if (next) { UI.cursor = next; UI.dir = 1; UI.anim = true; }
+    saveLocal(); render();
+  }, 170);
+}
+function step(d) {
+  const q = queue(), i = q.findIndex(g => g.id === UI.cursor), n = q[i + d];
+  if (n) { UI.cursor = n.id; UI.dir = d; UI.anim = true; saveLocal(); render(); }
+}
+document.addEventListener("click", e => {
+  const el = e.target.closest("button, [data-close]");
+  if (!el) return;
+  if (el.id === "tab-pick") { UI.view = "pick"; UI.resetArmed = false; render(); window.scrollTo(0, 0); return; }
+  if (el.id === "tab-table") { UI.view = "table"; render(); window.scrollTo(0, 0); return; }
+  if (el.id === "tab-po") { UI.view = "po"; UI.resetArmed = false; render(); window.scrollTo(0, 0); return; }
+  if (el.id === "tab-rec") { UI.view = "rec"; UI.resetArmed = false; render(); window.scrollTo(0, 0); return; }
+  if (el.dataset.rec) { UI.recMode = el.dataset.rec; return render(); }
+  if (el.dataset.conf) { UI.conf = +el.dataset.conf; return render(); }
+  if (el.hasAttribute("data-close")) { UI.team = null; renderSheet(); return; }
+  if (el.dataset.p !== undefined) return choose(+el.dataset.p);
+  if (el.dataset.step) return step(+el.dataset.step);
+  if (el.hasAttribute("data-skip")) {
+    const q = queue(); const i = q.findIndex(g => g.id === UI.cursor);
+    const next = firstOpen(UI.cursor) || (q[i + 1] || q[0]).id;
+    UI.cursor = next; UI.dir = 1; UI.anim = true; saveLocal(); return render();
+  }
+  if (el.hasAttribute("data-clear")) { delete S.picks[UI.cursor]; persist(); return render(); }
+  if (el.dataset.wk) {
+    const w = +el.dataset.wk, wg = queue().filter(g => g.wk === w);
+    const g = wg.find(x => S.picks[x.id] === undefined) || wg[0];
+    UI.dir = g.i >= (BYID[UI.cursor] || g).i ? 1 : -1; UI.anim = true; UI.cursor = g.id; saveLocal(); return render();
+  }
+  if (el.dataset.go === "table") { UI.view = "table"; render(); window.scrollTo(0, 0); return; }
+  if (el.dataset.mode) { UI.tableMode = el.dataset.mode; return render(); }
+  if (el.dataset.team) { UI.team = el.dataset.team; return renderSheet(); }
+  if (el.dataset.goto) { UI.cursor = el.dataset.goto; UI.team = null; UI.view = "pick"; UI.dir = 1; saveLocal(); render(); window.scrollTo(0, 0); return; }
+  if (el.hasAttribute("data-refresh")) return refreshScores(true);
+  if (el.id === "export") return downloadPicks();
+  if (el.id === "import-cancel") { UI.pendingImport = null; UI.importMsg = ""; return render(); }
+  if (el.id === "import-yes") {
+    S.picks = UI.pendingImport.picks; S.useResults = UI.pendingImport.useResults; UI.pendingImport = null;
+    UI.importMsg = "Picks restored."; persist(); UI.cursor = firstOpen(); return render();
+  }
+  if (el.id === "reset") {
+    if (!UI.resetArmed) { UI.resetArmed = true; render(); setTimeout(() => { if (UI.resetArmed) { UI.resetArmed = false; if (UI.view === "table") render(); } }, 4000); return; }
+    UI.resetArmed = false;
+    for (const id in S.picks) if (!played(BYID[id])) delete S.picks[id];
+    persist(); UI.cursor = firstOpen(); return render();
+  }
+});
+document.addEventListener("click", e => {
+  const tr = e.target.closest("tr[data-team]");
+  if (tr) { UI.team = tr.dataset.team; renderSheet(); }
+});
+document.addEventListener("change", e => {
+  if (e.target.id === "import-file" && e.target.files && e.target.files[0]) { readImport(e.target.files[0]); return; }
+  if (e.target.id === "opt-results") { S.useResults = e.target.checked; persist(); if (!inQueue(BYID[UI.cursor])) UI.cursor = firstOpen(); render(); }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && UI.team) { UI.team = null; renderSheet(); }
+  if (UI.view !== "pick" || UI.team) return;
+  if (e.key === "ArrowLeft") step(-1);
+  if (e.key === "ArrowRight") step(1);
+});
+
+/* ---------- boot ---------- */
+(function boot() {
+  loadCachedScores();
+  const local = loadLocal();
+  if (local) Object.assign(S, local);
+  else if (SEED) { Object.assign(S, clean(SEED)); S.updatedAt = Date.now(); saveLocal(); }
+  try { const raw = JSON.parse(localStorage.getItem(LS_KEY) || "null"); if (raw && BYID[raw.cursor]) UI.cursor = raw.cursor; } catch (e) {}
+  if (!UI.cursor || !inQueue(BYID[UI.cursor])) UI.cursor = firstOpen();
+  render();
+  if (Date.now() - FEED.checkedAt > FEED_MAX_AGE) refreshScores(false);
+})();
+</script>
+
+</body>
+</html>
