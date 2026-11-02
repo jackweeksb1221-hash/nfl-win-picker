@@ -37,7 +37,7 @@ Keep `index.html` as one file and don't run it through a bundler or framework. E
   - The finished game counts 100% for the winner in win totals, playoff seeds and odds.
   - The original pick stays saved, and the **My picks** tab grades it right or wrong.
   - New spreads, odds and kickoff-time changes come in at the same time.
-- **If the feed can't be reached**, the page uses the last scores saved in that browser. If there are none, it uses the scores built into `index.html`, which run through Week 7 (as of Oct 28, 2026).
+- **If the feed can't be reached**, the page uses the last scores saved in that browser. If there are none, it uses the scores built into `index.html`, which run through Week 8 (as of Nov 2, 2026).
 - There's no cron job, server or scheduled task to set up.
 
 ## Where picks are saved
